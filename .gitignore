@@ -1,0 +1,24 @@
+# Node.js backend dependencies
+Back_end/node_modules
+node_modules
+
+# Environment variables file (contains secrets!)
+Back_end/.env
+.env
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Log files (if any)
+*.log
+logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build output (if you have a build step)
+dist
+build
