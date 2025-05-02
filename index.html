@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navigation App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav>
+        <!-- Logo is now a direct child -->
+        <img src="Costech.jpg" alt="Costech Logo" class="logo">
+
+        <!-- Container for the main page links -->
+        <div class="nav-links-container">
+            <a id="home" data-page="pagehome.html" onclick="loadPage(this)" title="Main Home" class="main-nav hidden">Home</a>
+            <a id="similarity" data-page="similarity.html" onclick="loadPage(this)" title="The data of the columns you select will be displayed here" class="main-nav hidden">Display Patients</a>
+            <a id="result_similar" data-page="result_similar.html" onclick="loadPage(this)" title=" Your result of compute closest will display here" class="main-nav hidden">Compute Closest</a>
+            <a id="virtual" data-page="virtual.html" onclick="loadPage(this)" title="You can set your virtual patients here" class="main-nav hidden">Select values</a>
+            <a id="result_virtual" data-page="result_virtual.html" onclick="loadPage(this)" title="The result of your compute virtual patients will display here" class="main-nav hidden">Explore Hypothesis</a>
+        </div>
+
+        <!-- Container for Language and User Controls -->
+        <div class="controls-container"> <!-- New container -->
+            <!-- Language Selector -->
+            <div class="language-selector">
+                <label for="languageSelect" class="visually-hidden">Language:</label> <!-- Hidden label for accessibility -->
+                <select id="languageSelect" onchange="changeLanguage(this.value)">
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                </select>
+            </div>
+
+            <!-- User-specific controls -->
+            <div class="user-controls">
+                <span id="loggedInUserDisplay" class="hidden"></span>
+                <a id="logoutLink" onclick="logout()" class="hidden">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+
+    <!-- The iframe where content pages will be loaded -->
+    <iframe id="content" src="login.html" name="contentFrame"></iframe>
+
+    <script>
+        const contentFrame = document.getElementById("content");
+        const mainNavLinks = document.querySelectorAll("nav a.main-nav");
+        const logoutLink = document.getElementById("logoutLink");
+        const loggedInUserDisplay = document.getElementById("loggedInUserDisplay");
+        const languageSelect = document.getElementById("languageSelect"); // Get the select element
+        const API_BASE_URL = 'https://aidiagmed.utc.fr';
+        let currentUserToken = null;
+        let currentUserId = null;
+        let currentUserEmail = null;
+        const translations = {
+            en: {
+                appTitle: "Navigation App",
+                navHome: "Home",
+                navHomeTitle: "Main Home",
+                navDisplayPatients: "Display Patients",
+                navDisplayPatientsTitle: "The data of the columns you select will be displayed here",
+                navComputeClosest: "Compute Closest",
+                navComputeClosestTitle: "Your result of compute closest will display here",
+                navSelectValues: "Select values",
+                navSelectValuesTitle: "You can set your virtual patients here",
+                navExploreHypothesis: "Explore Hypothesis",
+                navExploreHypothesisTitle: "The result of your compute virtual patients will display here",
+                userLabel: "User:",
+                logout: "Logout",
+                languageLabel: "Language:", // For the hidden label
+            },
+            fr: {
+                appTitle: "App de Navigation",
+                navHome: "Accueil",
+                navHomeTitle: "Accueil Principal",
+                navDisplayPatients: "Afficher Patients",
+                navDisplayPatientsTitle: "Les données des colonnes sélectionnées seront affichées ici",
+                navComputeClosest: "Calculer Proximité",
+                navComputeClosestTitle: "Votre résultat du calcul de proximité s'affichera ici",
+                navSelectValues: "Sélectionner Valeurs",
+                navSelectValuesTitle: "Vous pouvez définir vos patients virtuels ici",
+                navExploreHypothesis: "Explorer Hypothèse",
+                navExploreHypothesisTitle: "Le résultat de vos calculs de patients virtuels s'affichera ici",
+                userLabel: "Utilisateur :",
+                logout: "Déconnexion",
+                languageLabel: "Langue :",
+            }
+        };
+         function getCurrentLanguage() {
+            return localStorage.getItem('appLanguage') || 'en'; // Default to English
+        }
+
+        function applyIndexLanguage(lang) {
+            if (!translations[lang]) lang = 'en'; // Fallback to English
+
+            const currentTranslations = translations[lang];
+
+            // Update page title
+            document.title = currentTranslations.appTitle;
+
+            // Update HTML lang attribute
+            document.documentElement.lang = lang;
+
+            // Update nav links text and titles
+            document.getElementById('home').textContent = currentTranslations.navHome;
+            document.getElementById('home').title = currentTranslations.navHomeTitle;
+            document.getElementById('similarity').textContent = currentTranslations.navDisplayPatients;
+            document.getElementById('similarity').title = currentTranslations.navDisplayPatientsTitle;
+            document.getElementById('result_similar').textContent = currentTranslations.navComputeClosest;
+            document.getElementById('result_similar').title = currentTranslations.navComputeClosestTitle;
+            document.getElementById('virtual').textContent = currentTranslations.navSelectValues;
+            document.getElementById('virtual').title = currentTranslations.navSelectValuesTitle;
+            document.getElementById('result_virtual').textContent = currentTranslations.navExploreHypothesis;
+            document.getElementById('result_virtual').title = currentTranslations.navExploreHypothesisTitle;
+            if (currentUserEmail) { // Check if user is logged in
+                loggedInUserDisplay.textContent = `${currentTranslations.userLabel} ${currentUserEmail}`;
+            } else {
+                 loggedInUserDisplay.textContent = '';
+            }
+            logoutLink.textContent = currentTranslations.logout;
+            languageSelect.value = lang;
+            const hiddenLangLabel = document.querySelector('label[for="languageSelect"]');
+            if (hiddenLangLabel) {
+                hiddenLangLabel.textContent = currentTranslations.languageLabel;
+            }
+            console.log(`Index page language applied: ${lang}`);
+        }
+
+        function changeLanguage(lang) {
+            console.log(`Changing language to: ${lang}`);
+            localStorage.setItem('appLanguage', lang); // Save preference
+            applyIndexLanguage(lang); // Update index.html UI
+
+            // Notify the current iframe
+            if (contentFrame.contentWindow) {
+                console.log(`Notifying iframe about language change to ${lang}`);
+                contentFrame.contentWindow.postMessage({ action: 'setLanguage', lang: lang }, '*'); // Use specific origin in production
+            }
+        }
+        function setNavState(isLoggedIn) {
+            console.log(`Setting nav state: isLoggedIn=${isLoggedIn}, user=${currentUserEmail}`);
+
+            mainNavLinks.forEach(link => link.classList.toggle('hidden', !isLoggedIn));
+            logoutLink.classList.toggle('hidden', !isLoggedIn);
+            loggedInUserDisplay.classList.toggle('hidden', !isLoggedIn);
+
+            // Update user display text based on current language
+            if (isLoggedIn && currentUserEmail) {
+                const currentLang = getCurrentLanguage();
+                loggedInUserDisplay.textContent = `${translations[currentLang].userLabel} ${currentUserEmail}`;
+            } else {
+                loggedInUserDisplay.textContent = '';
+            }
+        }
+
+        function loadPage(linkElement) {
+            if (!linkElement) {
+                console.error("loadPage called without a valid link element.");
+                return;
+            }
+            const page = linkElement.getAttribute('data-page');
+
+            if (contentFrame && page) {
+                console.log(`Requesting to load page: ${page}`);
+                 contentFrame.onload = () => {
+                     console.log(`Iframe finished loading: ${page}`);
+                     const currentLang = getCurrentLanguage(); // Get the current language preference
+                     if (contentFrame.contentWindow) {
+                         if (currentUserId  && page !== 'login.html') {
+                             console.log(`Notifying iframe ${page} user: ${currentUserEmail} (UID: ${currentUserId})`);
+                             contentFrame.contentWindow.postMessage({ action: 'setUser', uid: currentUserId, email: currentUserEmail }, '*');
+                         } else {
+                             console.log(`Not sending 'setUser' to ${page} (User not logged in or login page)`);
+                         }
+                         console.log(`Notifying iframe ${page} about current language: ${currentLang}`);
+                         contentFrame.contentWindow.postMessage({ action: 'setLanguage', lang: currentLang }, '*');
+
+                     } else {
+                         console.error(`Could not access contentWindow for iframe ${page} after loading.`);
+                     }
+                     contentFrame.onload = null;
+                 };
+                contentFrame.src = page;
+
+                // Update navigation link styles
+                mainNavLinks.forEach(link => link.classList.remove("active"));
+                if (linkElement.classList.contains('main-nav')) {
+                    linkElement.classList.add("active");
+                }
+
+            } else if (page !== 'login.html') { // Don't log error for login page case handled above
+                console.error("Iframe #content not found or page attribute missing!");
+            }
+        }
+        async function checkLoginStatus() {
+            console.log("Checking login status via token...");
+            currentUserToken = localStorage.getItem('authToken');
+
+            if (!currentUserToken) {
+                console.log("No auth token found in localStorage.");
+                handleLogoutUI(); // Treat as logged out
+                return;
+            }
+
+            console.log("Auth token found, verifying with backend...");
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${currentUserToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.isLoggedIn && data.user) {
+                        console.log("Token verified. User logged in:", data.user);
+                        currentUserId = data.user.id;
+                        currentUserEmail = data.user.email;
+                        // Optionally store ID/email in localStorage too if needed by other parts immediately
+                        localStorage.setItem('currentUserId', currentUserId);
+                        localStorage.setItem('currentUserEmail', currentUserEmail);
+
+                        setNavState(true); // Update nav bar for logged-in user
+
+                        // Decide which page to show or notify
+                        const currentIframeSrc = contentFrame.getAttribute('src') || '';
+                        const currentIframePage = currentIframeSrc.split('/').pop();
+
+                        if (!currentIframePage || currentIframePage === 'login.html' || currentIframePage === 'about:blank') {
+                            console.log("User logged in, loading home page.");
+                            const homeLink = document.getElementById('home');
+                            if (homeLink) loadPage(homeLink); // This will send context on load
+                        } else {
+                            console.log(`User already on page ${currentIframePage}. Sending context.`);
+                            if (contentFrame.contentWindow) {
+                                 // Send user context to the already loaded iframe
+                                 contentFrame.contentWindow.postMessage({ action: 'setUser', userId: currentUserId, email: currentUserEmail }, '*');
+                                 contentFrame.contentWindow.postMessage({ action: 'setLanguage', lang: getCurrentLanguage() }, '*');
+                            }
+                        }
+                    } else {
+                         console.warn("Token verification API returned OK but isLoggedIn=false.");
+                         handleLogoutUI();
+                    }
+                } else if (response.status === 401 || response.status === 403) {
+                     console.log("Token invalid or expired. Forcing logout.");
+                     handleLogoutUI();
+                } else {
+                     console.error("Error verifying token with backend:", response.status, await response.text());
+                     handleLogoutUI(); // Force logout on verification error for simplicity
+                }
+            } catch (error) {
+                console.error("Network error checking login status:", error);
+                 handleLogoutUI();
+            }
+        }
+
+        function handleLogoutUI() {
+                console.log("Handling logout UI state.");
+                currentUserToken = null;
+                currentUserId = null;
+                currentUserEmail = null;
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('currentUserId');
+                localStorage.removeItem('currentUserEmail');
+
+                setNavState(false); // Hide nav links, show login (implicitly handled by redirect)
+                mainNavLinks.forEach(link => link.classList.remove("active"));
+
+                const currentIframeSrc = contentFrame.getAttribute('src') || '';
+                const currentIframePage = currentIframeSrc.split('/').pop();
+                const currentLang = getCurrentLanguage();
+
+                // Navigate to login page if not already there
+                 if (currentIframePage !== 'login.html') {
+                     console.log("Navigating to login page.");
+                     contentFrame.onload = () => { // Ensure language is sent after login page loads
+                         if (contentFrame.contentWindow) {
+                             console.log(`Notifying login page language: ${currentLang}`);
+                             contentFrame.contentWindow.postMessage({ action: 'setLanguage', lang: currentLang }, '*');
+                         }
+                         contentFrame.onload = null;
+                     };
+                     contentFrame.src = 'login.html';
+                 } else {
+                     // Already on login page, just ensure it gets language update if needed
+                      if (contentFrame.contentWindow) {
+                        console.log(`Already on login page. Sending language: ${currentLang}`);
+                        contentFrame.contentWindow.postMessage({ action: 'setLanguage', lang: currentLang }, '*');
+                      }
+                 }
+            }
+        async function logout() { // Make async if needed for cleanup, though signOut is fast
+            const loggedOutEmail = currentUserEmail; // Get email before signing out
+            console.log(`User logging out: ${loggedOutEmail}`);
+            handleLogoutUI();
+        }
+
+         window.addEventListener('message', (event) => {
+                if (!event.data || !event.data.action) {
+                    return; // Ignore messages without action
+                }
+                console.log("Message received from iframe:", event.data);
+                switch(event.data.action) {
+                    case 'requestNavigation':
+                        const targetPage = event.data.targetPage;
+                        const targetId = event.data.targetId;
+                        const linkElement = document.getElementById(targetId);
+                        if (linkElement && linkElement.getAttribute('data-page') === targetPage) {
+                             console.log(`Processing navigation request to ${targetPage} via link #${targetId}`);
+                             loadPage(linkElement);
+                        } else {
+                            console.error(`Nav request failed: Link element #${targetId} for page '${targetPage}' not found or mismatch.`);
+                        }
+                        break;
+                    case 'requestLanguage':
+                         // Send current language back to the requesting iframe
+                         const currentLang = getCurrentLanguage();
+                         if (contentFrame.contentWindow && event.source === contentFrame.contentWindow) {
+                            console.log(`Sending current language ${currentLang} to requesting iframe`);
+                            event.source.postMessage({ action: 'setLanguage', lang: currentLang }, '*');
+                         }
+                         break;
+                    case 'loginSuccess':
+                         // Login page successfully logged in and stored token
+                         console.log("Received loginSuccess message. Re-checking login status...");
+                         checkLoginStatus(); // Verify the new token and update index.html UI
+                         break;
+                    // Remove case 'setUser': This should be initiated by index.html now
+                    default:
+                        console.log("Received unhandled message action from iframe:", event.data.action);
+                }
+            });
+
+        window.onload = async function () { // Make async for checkLoginStatus
+            console.log("Index page loaded. Initializing language...");
+            const initialLang = getCurrentLanguage();
+            applyIndexLanguage(initialLang); // Apply language to index itself first
+            console.log("Index page initialization complete. Checking login status...");
+            await checkLoginStatus(); // Check token status when page loads
+        };
+    </script>
+</body>
+</html>

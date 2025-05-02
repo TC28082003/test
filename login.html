@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en"> <!-- Default lang, will be updated by JS -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login / Sign Up</title> <!-- Default title, will be updated -->
+    <link rel="stylesheet" href="login.css">
+
+</head>
+<body>
+    <div class="login-container">
+        <!-- Login Form -->
+        <form id="loginForm">
+            <h2 id="loginHeader">Login</h2> <!-- Added ID -->
+            <!-- Message div placed BEFORE inputs for better flow -->
+            <div id="loginMessage" class="message"></div>
+            <div class="form-group">
+                <label for="loginUsername" id="loginUsernameLabel">Username</label> <!-- Added ID -->
+                <input type="text" id="loginUsername" placeholder="Enter your username" required> <!-- Added ID -->
+            </div>
+            <div class="form-group">
+                <label for="loginPassword" id="loginPasswordLabel">Password</label> <!-- Added ID -->
+                <input type="password" id="loginPassword" placeholder="Enter your password" required> <!-- Added ID -->
+            </div>
+            <button type="submit" class="button-base" id="loginButton">Login</button> <!-- Added ID -->
+            <p class="toggle-link" onclick="toggleForms()" id="toggleToSignupLink">Need an account? Sign Up</p> <!-- Added ID -->
+        </form>
+
+        <!-- Sign Up Form -->
+        <form id="signupForm" style="display: none;"> <!-- Hide signup initially -->
+            <h2 id="signupHeader">Sign Up</h2> <!-- Added ID -->
+            <p id="signupNote"> <!-- Added ID -->
+            <!-- Message div placed BEFORE inputs -->
+            <div id="signupMessage" class="message"></div>
+            <div class="form-group">
+                <label for="signupUsername" id="signupUsernameLabel">Username</label> <!-- Added ID -->
+                <input type="text" id="signupUsername" placeholder="Choose a username" required> <!-- Added ID -->
+            </div>
+            <div class="form-group">
+                <label for="signupPassword" id="signupPasswordLabel">Password</label> <!-- Added ID -->
+                <input type="password" id="signupPassword" placeholder="Create a password (min 6 chars)" required> <!-- Added ID -->
+                 <!-- Basic password strength message area (optional) -->
+                 <small id="passwordHelp" style="display: none; color: var(--error-color); margin-top: 5px;"></small>
+            </div>
+            <button type="submit" class="button-base" id="signupButton">Sign Up</button> <!-- Added ID -->
+            <p class="toggle-link" onclick="toggleForms()" id="toggleToLoginLink">Already have an account? Login</p> <!-- Added ID -->
+        </form>
+    </div>
+
+        <script>
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            const loginMessage = document.getElementById('loginMessage');
+            const signupMessage = document.getElementById('signupMessage');
+            const signupPasswordInput = document.getElementById('signupPassword');
+            const passwordHelp = document.getElementById('passwordHelp');
+
+            // --- Define API Base URL ---
+            const API_BASE_URL = 'https://aidiagmed.utc.fr'; // Adjust if your backend runs elsewhere
+
+            // --- START: Language Translation Code ---
+            let currentPageLanguage = 'en'; // Default
+
+            const pageTranslations = {
+                en: {
+                    pageTitle: "Login / Sign Up",
+                    loginHeader: "Login",
+                    loginUsernameLabel: "Email", // Changed from Username
+                    loginUsernamePlaceholder: "Enter your email",
+                    loginPasswordLabel: "Password",
+                    loginPasswordPlaceholder: "Enter your password",
+                    loginButton: "Login",
+                    toggleToSignupLink: "Need an account? Sign Up",
+                    signupHeader: "Sign Up",
+                    signupUsernameLabel: "Email", // Changed from Username
+                    signupUsernamePlaceholder: "Enter your email",
+                    signupPasswordLabel: "Password",
+                    signupPasswordPlaceholder: "Create a password (min 6 chars)",
+                    passwordHelpLength: "Password should be at least 6 characters.",
+                    signupButton: "Sign Up",
+                    toggleToLoginLink: "Already have an account? Login",
+                    // Messages
+                    errorSaveUser: "Error creating account. Please try again.",
+                    loginFail: "Invalid email or password.",
+                    signupUserExists: "An account with this email already exists. Please login.",
+                    signupWeakPassword: "Password is too weak (must be at least 6 characters).",
+                    invalidEmail: "Please enter a valid email address.",
+                    networkError: "Network error. Please check your connection and ensure the backend server is running.",
+                    errorLoginEmpty: "Please enter both email and password.",
+                    loginSuccess: "Login successful! Redirecting...", // Updated message
+                    errorSignupEmpty: "Email and password cannot be empty.",
+                    signupSuccess: "Sign up successful! You can now log in.",
+                    loginApiError: "Login failed (API error).", // New generic API error
+                    signupApiError: "Signup failed (API error)." // New generic API error
+                },
+                fr: {
+                    pageTitle: "Connexion / Inscription",
+                    loginHeader: "Connexion",
+                    loginUsernameLabel: "E-mail",
+                    loginUsernamePlaceholder: "Entrez votre e-mail",
+                    loginPasswordLabel: "Mot de passe",
+                    loginPasswordPlaceholder: "Entrez votre mot de passe",
+                    loginButton: "Se connecter",
+                    toggleToSignupLink: "Besoin d'un compte ? S'inscrire",
+                    signupHeader: "Inscription",
+                    signupUsernameLabel: "E-mail",
+                    signupUsernamePlaceholder: "Entrez votre e-mail",
+                    signupPasswordLabel: "Mot de passe",
+                    signupPasswordPlaceholder: "Créez un mot de passe (min 6 car.)",
+                    passwordHelpLength: "Le mot de passe doit faire au moins 6 caractères.",
+                    signupButton: "S'inscrire",
+                    toggleToLoginLink: "Déjà un compte ? Se connecter",
+                    // Messages
+                    errorSaveUser: "Erreur lors de la création du compte. Veuillez réessayer.",
+                    loginFail: "E-mail ou mot de passe invalide.",
+                    signupUserExists: "Un compte avec cet e-mail existe déjà. Veuillez vous connecter.",
+                    signupWeakPassword: "Le mot de passe est trop faible (minimum 6 caractères).",
+                    invalidEmail: "Veuillez entrer une adresse e-mail valide.",
+                    networkError: "Erreur réseau. Veuillez vérifier votre connexion et que le serveur backend est démarré.",
+                    errorLoginEmpty: "Veuillez entrer l'e-mail et le mot de passe.",
+                    loginSuccess: "Connexion réussie ! Redirection...", // Updated message
+                    errorSignupEmpty: "L'e-mail et le mot de passe ne peuvent pas être vides.",
+                    signupSuccess: "Inscription réussie ! Vous pouvez maintenant vous connecter.",
+                    loginApiError: "Échec de la connexion (erreur API).", // New generic API error
+                    signupApiError: "Échec de l'inscription (erreur API)." // New generic API error
+                }
+            };
+
+            function applyLanguage(lang) {
+                if (!pageTranslations[lang]) lang = 'en'; // Fallback
+                currentPageLanguage = lang; // Store current language
+                const T = pageTranslations[currentPageLanguage];
+
+                document.documentElement.lang = lang;
+                document.title = T.pageTitle;
+
+                // Update elements (ensure IDs match your HTML)
+                document.getElementById('loginHeader').textContent = T.loginHeader;
+                document.getElementById('loginUsernameLabel').textContent = T.loginUsernameLabel;
+                document.getElementById('loginUsername').placeholder = T.loginUsernamePlaceholder;
+                document.getElementById('loginPasswordLabel').textContent = T.loginPasswordLabel;
+                document.getElementById('loginPassword').placeholder = T.loginPasswordPlaceholder;
+                document.getElementById('loginButton').textContent = T.loginButton;
+                document.getElementById('toggleToSignupLink').textContent = T.toggleToSignupLink;
+
+                document.getElementById('signupHeader').textContent = T.signupHeader;
+                document.getElementById('signupUsernameLabel').textContent = T.signupUsernameLabel;
+                document.getElementById('signupUsername').placeholder = T.signupUsernamePlaceholder;
+                document.getElementById('signupPasswordLabel').textContent = T.signupPasswordLabel;
+                document.getElementById('signupPassword').placeholder = T.signupPasswordPlaceholder;
+                document.getElementById('signupButton').textContent = T.signupButton;
+                document.getElementById('toggleToLoginLink').textContent = T.toggleToLoginLink;
+
+                clearMessages();
+                console.log(`Login page language applied: ${lang}`);
+            }
+
+            function displayMessage(element, messageKeyOrText, isError = false) {
+                 const T = pageTranslations[currentPageLanguage];
+                 let messageText = T[messageKeyOrText] || messageKeyOrText; // Use translation key or literal text
+
+                 element.textContent = messageText;
+                 element.className = `message ${isError ? 'error-message' : 'success-message'}`;
+                 element.style.display = 'block';
+            }
+
+            function clearMessages() {
+                loginMessage.style.display = 'none';
+                loginMessage.textContent = '';
+                loginMessage.className = 'message';
+
+                signupMessage.style.display = 'none';
+                signupMessage.textContent = '';
+                signupMessage.className = 'message';
+
+                if (passwordHelp) {
+                    passwordHelp.style.display = 'none';
+                    passwordHelp.textContent = '';
+                }
+                 if (signupPasswordInput) {
+                     signupPasswordInput.style.borderColor = ''; // Reset border
+                 }
+            }
+
+            function toggleForms() {
+                clearMessages();
+                 const isLoginVisible = loginForm.style.display !== 'none';
+                 loginForm.style.display = isLoginVisible ? 'none' : 'block';
+                 signupForm.style.display = isLoginVisible ? 'block' : 'none';
+            }
+
+            // --- Event Handlers (Modified for API calls) ---
+
+            loginForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                clearMessages();
+                // Use 'loginUsername' ID for email input
+                const email = document.getElementById('loginUsername').value.trim();
+                const password = document.getElementById('loginPassword').value;
+                const loginButton = loginForm.querySelector('button');
+                const T = pageTranslations[currentPageLanguage];
+
+                if (!email || !password) {
+                     displayMessage(loginMessage, 'errorLoginEmpty', true);
+                     return;
+                }
+                loginButton.disabled = true;
+                // Show a generic "Logging in..." message
+                displayMessage(loginMessage, 'Logging in...', false);
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, password }) // Send email/password
+                    });
+
+                    const data = await response.json(); // Expect JSON response
+
+                    if (response.ok) {
+                        console.log("API Login successful:", data);
+                        if (data.token) {
+                            localStorage.setItem('authToken', data.token);
+                            localStorage.setItem('currentUserEmail', data.user.email); // Store email if needed by parent immediately
+                            localStorage.setItem('currentUserId', data.user.id); // Store ID
+
+                            displayMessage(loginMessage, 'loginSuccess', false); // Show success message
+
+                            if (window.parent) {
+                                 window.parent.postMessage({ action: 'loginSuccess' }, '*'); // Simple notification
+                            }
+
+                        } else {
+                            console.error("Login succeeded (API ok) but no token received.");
+                            displayMessage(loginMessage, 'loginApiError', true);
+                            loginButton.disabled = false;
+                        }
+                    } else {
+                        // Handle API errors (4xx, 5xx)
+                        console.error("API Login Failed:", response.status, data.message);
+                        // Try to use the message from the backend API response
+                        displayMessage(loginMessage, data.message || T.loginFail, true);
+                        loginButton.disabled = false;
+                    }
+                } catch (error) {
+                    // Handle network errors (fetch failed)
+                    console.error("Network Error during Login:", error);
+                    displayMessage(loginMessage, 'networkError', true);
+                    loginButton.disabled = false;
+                }
+            });
+
+            signupForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                clearMessages();
+                // Use 'signupUsername' ID for email input
+                const email = document.getElementById('signupUsername').value.trim();
+                const password = signupPasswordInput.value;
+                const signupButton = signupForm.querySelector('button');
+                const T = pageTranslations[currentPageLanguage];
+
+                // Basic client-side validation
+                if (!email || !password) {
+                    displayMessage(signupMessage, 'errorSignupEmpty', true);
+                    return;
+                }
+                if (password.length < 6) {
+                     displayMessage(signupMessage, 'signupWeakPassword', true);
+                     if (passwordHelp) { /* show help */ }
+                     return;
+                 }
+                signupButton.disabled = true;
+                displayMessage(signupMessage, 'Creating account...', false);
+
+                try {
+                     const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, password }) // Send email/password
+                    });
+
+                     const data = await response.json(); // Expect JSON response
+
+                     if (response.ok) { // Status 201 Created
+                         console.log("API Signup successful:", data.message);
+                         displayMessage(signupMessage, 'signupSuccess', false);
+                         signupForm.reset();
+                         setTimeout(() => {
+                             toggleForms(); // Switch to login form
+                             signupButton.disabled = false;
+                             loginForm.querySelector('button').disabled = false;
+                         }, 1500);
+                     } else {
+                         // Handle API errors (e.g., 400 for weak password, 409 for duplicate email)
+                         console.error("API Signup Failed:", response.status, data.message);
+                         // Use message from backend API response if available
+                         displayMessage(signupMessage, data.message || T.signupApiError, true);
+                         signupButton.disabled = false;
+                     }
+
+                } catch (error) {
+                     // Handle network errors
+                     console.error("Network Error during Signup:", error);
+                     displayMessage(signupMessage, 'networkError', true);
+                     signupButton.disabled = false;
+                }
+            });
+
+            // Message listener: Handle language changes from parent
+            window.addEventListener('message', (event) => {
+                 if (event.data && event.data.action === 'setLanguage') {
+                     console.log(`login.html received language: ${event.data.lang}`);
+                     applyLanguage(event.data.lang);
+                 }
+            });
+
+            // Initial setup on page load
+             window.onload = () => {
+                 clearMessages();
+                 loginForm.style.display = 'block';
+                 signupForm.style.display = 'none';
+                 console.log("Login page script loaded. API integration active.");
+                 // Request initial language from parent
+                 if (window.parent) {
+                     window.parent.postMessage({ action: 'requestLanguage' }, '*');
+                 }
+                 // Apply default/stored language initially
+                 applyLanguage(localStorage.getItem('appLanguage') || 'en');
+             };
+        </script>
+</body>
+</html>

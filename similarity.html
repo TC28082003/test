@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display patients</title>
+    <link rel="stylesheet" href="style_table.css">
+</head>
+<body>
+    <div id="sortOptionsPopup" style="display: none; position: absolute; border: 1px solid #ccc; background-color: dodgerblue; padding: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); z-index: 10;">
+        <span id="closeSortPopup" class="close-button" title="Close"><img src="close-icon.png" alt="Close"></span>
+        <p id="sortPopupTitle">Sort options for:</p>
+        <p><strong id="sortColumnName"></strong></p>
+        <button id="sortAscButton">Sort Ascending (Min first)</button><br>
+        <button id="sortDescButton">Sort Descending (Max first)</button><br>
+    </div>
+    <div class="table" id="table"></div>
+        <!-- Search Button Container -->
+    <br>
+    <div class="search-button-container">
+         <button class="button" id="searchReorderButton">Search
+                 <span class="tooltip" id="searchTooltip">Click here to filter the displayed data.</span>
+         </button>
+
+         <button class="button" id="clearSearchResetViewButton">Clear Search
+                <span class="tooltip" id="clearSearchTooltip" >Click here to do clear/reset search.</span>
+         </button>
+        <button class="button" id="computeClosestButton" onclick="calculer_similarity()">
+        Compute closest
+            <span class="tooltip" id="computeClosestTooltip">Click here to calcul your compute closest.</span>
+        </button>
+        <button class="button" id="exploreHypothesisButton" onclick="virtual_profile()">Explore hypothesis
+            <span class="tooltip" id="exploreHypothesisTooltip">Click here to set value for your virtual patients.</span>
+        </button>
+    </div>
+    <script>
+        let currentUserId  = null;
+        let selectedColumns = [];
+        let data_transform = [];
+        let profileName = null;
+        let currentlySortingColumnIndex = -1; // To store which column index we are sorting
+        let currentSearchCriteria = {}; // Store active search terms
+        let selectedRowIndices = new Set();
+        let currentPageLanguage = 'en';
+        const pageTranslations = {
+            en: {
+                pageTitle: "Display Patients",
+                loadingUserContext: "Loading user context...",
+                loadingDataError: "Error: User context not loaded. Please try reloading or logging in again.",
+                noDataPassed: "No data passed for profile \"{profileName}\" for user {currentUserId}. Please go back and select data on the 'Page Home'.",
+                tableTitle: "Displaying data for profile: {profileName}", // Use {profileName} as placeholder
+                selectRowsHeader: "Select lines",
+                searchPlaceholder: "Search...",
+                // Sort Popup
+                sortPopupTitle: "Sort options for:",
+                sortAscButton: "Sort Ascending (Min first)",
+                sortDescButton: "Sort Descending (Max first)",
+                closeSortPopupTooltip: "Close",
+                // Buttons and Tooltips
+                searchButtonText: "Search",
+                searchButtonTooltip: "Click here to filter the displayed data.",
+                clearSearchButtonText: "Clear Search",
+                clearSearchButtonTooltip: "Click here to clear search filters and reset the view.",
+                computeClosestButtonText: "Compute Closest",
+                computeClosestButtonTooltip: "Click here to calculate similarity based on selection.",
+                computeClosestTooltipSelectPatient: "Please select at least one patient!",
+                computeClosestTooltipSelectColumn: "Please select at least one column!",
+                computeClosestTooltipReady: "Click here to calculate similarity.",
+                exploreHypothesisButtonText: "Explore Hypothesis",
+                exploreHypothesisButtonTooltip: "Click here to define and test virtual patients.",
+                exploreHypothesisTooltipSelectPatient: "Please select at least one patient!",
+                exploreHypothesisTooltipReady: "Click here to set up virtual patients.",
+                // Alerts / Messages
+                alterSearch: "No search terms entered. Displaying original order",
+                alertSelectPatient: "Please select at least one patient row!",
+                alertSelectColumn: "Please select at least one column for the calculation!",
+                alertSearchNotFound: "Found 0 results for your search!",
+                // Table status
+                noDataRows: "No data rows available.",
+                noProfile: "No Profile Name", // Fallback if profileName is missing
+                titleTable: "Result Similarity for "
+            },
+            fr: {
+                pageTitle: "Afficher Patients",
+                loadingUserContext: "Chargement du contexte utilisateur...",
+                loadingDataError: "Erreur : Contexte utilisateur non chargé. Veuillez recharger ou vous reconnecter.",
+                noDataPassed: "Aucune donnée transmise pour le profil \"{profileName}\" pour l'utilisateur {currentUserId}. Veuillez retourner à la page d'accueil et sélectionner des données.",
+                tableTitle: "Affichage des données pour le profil : {profileName}",
+                selectRowsHeader: "Sélec. lignes",
+                searchPlaceholder: "Rechercher...",
+                // Sort Popup
+                sortPopupTitle: "Options de tri pour :",
+                sortAscButton: "Tri Ascendant (Min d'abord)",
+                sortDescButton: "Tri Descendant (Max d'abord)",
+                closeSortPopupTooltip: "Fermer",
+                // Buttons and Tooltips
+                searchButtonText: "Rechercher",
+                searchButtonTooltip: "Cliquez ici pour filtrer les données affichées.",
+                clearSearchButtonText: "Effacer Rech.",
+                clearSearchButtonTooltip: "Cliquez ici pour effacer les filtres et réinitialiser la vue.",
+                computeClosestButtonText: "Calculer Proximité",
+                computeClosestButtonTooltip: "Cliquez ici pour calculer la similarité basée sur la sélection.",
+                computeClosestTooltipSelectPatient: "Veuillez sélectionner au moins une ligne patient !",
+                computeClosestTooltipSelectColumn: "Veuillez sélectionner au moins une colonne !",
+                computeClosestTooltipReady: "Cliquez ici pour calculer la similarité.",
+                exploreHypothesisButtonText: "Explorer Hypothèse",
+                exploreHypothesisButtonTooltip: "Cliquez ici pour définir et tester des patients virtuels.",
+                exploreHypothesisTooltipSelectPatient: "Veuillez sélectionner au moins une ligne patient !",
+                exploreHypothesisTooltipReady: "Cliquez ici pour configurer des patients virtuels.",
+                // Alerts / Messages
+                alterSearch: "Aucun terme de recherche saisi. Affichage de la commande d'origine.",
+                alertSelectPatient: "Veuillez sélectionner au moins une ligne patient !",
+                alertSelectColumn: "Veuillez sélectionner au moins une colonne pour le calcul !",
+                alertSearchNotFound: "Aucun résultat trouvé pour votre recherche !",
+                // Table status
+                noDataRows: "Aucune ligne de données disponible.",
+                noProfile: "Pas de Nom de Profil",
+                titleTable: "Similarité des résultats pour"
+            }
+        };
+        function applyLanguage(lang) {
+            if (!pageTranslations[lang]) lang = 'en'; // Fallback
+            currentPageLanguage = lang;
+            const T = pageTranslations[currentPageLanguage];
+
+            document.documentElement.lang = lang;
+            document.title = T.pageTitle;
+
+            // Update sort popup elements
+            const sortPopupTitleEl = document.getElementById('sortPopupTitle');
+            const sortAscButtonEl = document.getElementById('sortAscButton');
+            const sortDescButtonEl = document.getElementById('sortDescButton');
+            const closeSortPopupEl = document.getElementById('closeSortPopup'); // The span
+            if (sortPopupTitleEl) sortPopupTitleEl.textContent = T.sortPopupTitle;
+            if (sortAscButtonEl) sortAscButtonEl.textContent = T.sortAscButton;
+            if (sortDescButtonEl) sortDescButtonEl.textContent = T.sortDescButton;
+            if (closeSortPopupEl) closeSortPopupEl.title = T.closeSortPopupTooltip;
+
+            // Update main buttons and their tooltips
+            const searchBtn = document.getElementById('searchReorderButton');
+            const clearSearchBtn = document.getElementById('clearSearchResetViewButton');
+            const computeBtn = document.getElementById('computeClosestButton');
+            const exploreBtn = document.getElementById('exploreHypothesisButton');
+
+            const searchTooltip = document.getElementById('searchTooltip');
+            const clearSearchTooltip = document.getElementById('clearSearchTooltip');
+            const computeTooltip = document.getElementById('computeClosestTooltip');
+            const exploreTooltip = document.getElementById('exploreHypothesisTooltip');
+
+             // Update button text (stripping existing tooltip span if necessary)
+             if (searchBtn) searchBtn.childNodes[0].nodeValue = T.searchButtonText + ' '; // Text node before span
+             if (clearSearchBtn) clearSearchBtn.childNodes[0].nodeValue = T.clearSearchButtonText + ' ';
+             if (computeBtn) computeBtn.childNodes[0].nodeValue = T.computeClosestButtonText + ' ';
+             if (exploreBtn) exploreBtn.childNodes[0].nodeValue = T.exploreHypothesisButtonText + ' ';
+
+             // Update tooltip text
+            if (searchTooltip) searchTooltip.textContent = T.searchButtonTooltip;
+            if (clearSearchTooltip) clearSearchTooltip.textContent = T.clearSearchButtonTooltip;
+            if (computeTooltip) computeTooltip.textContent = T.computeClosestButtonTooltip; // Default tooltip
+            if (exploreTooltip) exploreTooltip.textContent = T.exploreHypothesisButtonTooltip; // Default tooltip
+
+
+            // Re-render the table if data exists, as headers/placeholders need translation
+            if (data_transform && data_transform.length > 0) {
+                 // Determine which rows are currently displayed (needed if search/sort is active)
+                 const currentOrder = getCurrentDisplayOrder(); // Get current state
+                 afficherTableau(currentOrder.length > 0 ? currentOrder : null); // Re-render with current order
+            } else {
+                // If no data, update any loading/error messages
+                 const tableDiv = document.getElementById('table');
+                 if (tableDiv && tableDiv.querySelector('h2')) { // Check if message exists
+                     // Re-evaluate the message based on current state and language
+                     if (!currentUserId) {
+                         tableDiv.innerHTML = `<h2>${T.loadingDataError}</h2>`;
+                     } else if (!data_transform || data_transform.length === 0) {
+                         tableDiv.innerHTML = `<h2>${T.noDataPassed.replace('{profileName}', profileName || T.noProfile).replace('{currentUserId}', currentUserId)}</h2>`;
+                     } else {
+                          // If data *is* present but table wasn't rendered, render it now
+                           const currentOrder = getCurrentDisplayOrder();
+                           afficherTableau(currentOrder.length > 0 ? currentOrder : null);
+                     }
+                 }
+            }
+
+            console.log(`Similarity page language applied: ${lang}`);
+        }
+    // --- Helper functions for user-specific localStorage ---
+        function getUserStorageKey(baseKey) {
+            if (!currentUserId) {
+                console.error("User UID not set, cannot access user-specific storage for key:", baseKey);
+                // Potentially redirect to login or show error
+                return null; // Or throw an error
+            }
+            return `${currentUserId}_${baseKey}`;
+        }
+
+        function setUserItem(baseKey, value) {
+            const userKey = getUserStorageKey(baseKey);
+            if (userKey) {
+                localStorage.setItem(userKey, JSON.stringify(value));
+            }
+        }
+
+        function getUserItem(baseKey, defaultValue = null) {
+            const userKey = getUserStorageKey(baseKey);
+            if (!userKey) return defaultValue;
+            try {
+                const item = localStorage.getItem(userKey);
+                return item ? JSON.parse(item) : defaultValue;
+            } catch (e) {
+                console.error(`Error parsing user item ${userKey}:`, e);
+                return defaultValue;
+            }
+        }
+
+        function initializePageDataAndDisplay() {
+            const T = pageTranslations[currentPageLanguage];
+            currentUserId = getUserItem('currentUserId', null); // Load UID if previously stored by pagehome
+            // Use current language
+            if (!currentUserId) {
+                 console.error("Cannot initialize page: Username not set.");
+                 document.getElementById('table').innerHTML = `<h2>${T.loadingDataError}</h2>`; // Translated error
+                 const buttons = document.querySelectorAll('.button');
+                 buttons.forEach(button => { button.disabled = true; button.style.opacity = 0.5; });
+                 return;
+             }
+            console.log(`Initializing page data for user: ${currentUserId}`);
+
+            // Load data using user-specific keys
+            selectedColumns = getUserItem('selectedColumns', []);
+            data_transform = getUserItem('data_transform', []);
+            profileName = getUserItem('profileName', '');
+
+            console.log("Initial load - User:", currentUserId);
+            console.log("Initial load - Selected Column Indices (Original Profile):", selectedColumns);
+            console.log("Initial load - Data for Table:", data_transform);
+            console.log("Initial load - Profile Name:", profileName);
+
+            if (!data_transform || data_transform.length === 0) {
+                console.warn("No data loaded for similarity display.");
+                const safeProfileName = profileName ? cleanProfileName(profileName) : T.noProfile;
+                document.getElementById('table').innerHTML = `<h2>${T.noDataPassed.replace('{profileName}', safeProfileName).replace('{currentUserId}', currentUserId)}</h2>`;
+                const buttons = document.querySelectorAll('.button');
+                buttons.forEach(button => { button.disabled = true; button.style.opacity = 0.5; });
+                return;
+            }
+
+            // Enable buttons if they were disabled
+            const buttons = document.querySelectorAll('.button');
+            buttons.forEach(button => { button.disabled = false; button.style.opacity = 1; });
+
+
+            // Now display the table with the loaded data
+            console.log("Data loaded, calling afficherTableau...");
+            afficherTableau(); // <<< Call display AFTER data is loaded
+        }
+
+        // The message listener remains largely the same, ensuring it calls initializePageDataAndDisplay
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.action) {
+                console.log(`similarity.html received message:`, event.data);
+                switch(event.data.action) {
+                    case 'setUser':
+                        const receivedUid = event.data.uid;
+                        console.log(`User context received: UID=${receivedUid}`);
+                        if (!currentUserId || currentUserId !== receivedUid) {
+                            currentUserId = receivedUid;
+                            setUserItem('currentUserId', currentUserId);
+                            console.log(`User ID set to: ${currentUserId}. Initializing page...`);
+                            initializePageDataAndDisplay();
+                        } else {
+                             console.log(`User ${currentUserId} already set. Re-initializing (data might have changed in pagehome).`);
+                             initializePageDataAndDisplay(); // Re-init might be needed if user navigated back and forth
+                        }
+                        break;
+                    case 'setLanguage':
+                        console.log(`Language received: ${event.data.lang}`);
+                        applyLanguage(event.data.lang);
+                        break;
+                     default:
+                         console.log("Received unhandled message action:", event.data.action);
+                         break;
+                }
+            }
+        });
+
+        // Afficher le tableau
+        function cleanProfileName(name) {
+            // Replace unwanted characters " and \ with an empty string
+            return name.replace(/["\\]/g, '');
+        }
+
+        function hideSortOptions() {
+            const popup = document.getElementById('sortOptionsPopup');
+            if (popup) {
+                popup.style.display = 'none';
+            }
+            console.log("Hide sort options");
+            currentlySortingColumnIndex = -1;
+        }
+
+        function showSortOptions(columnIndex, event) {
+            if (event.target.tagName === 'INPUT') {
+                 return;
+            }
+
+            const popup = document.getElementById('sortOptionsPopup');
+            const columnNameElement = document.getElementById('sortColumnName');
+            if (!popup || !columnNameElement || columnIndex < 0 || !data_transform[0]) return;
+
+            // Get the actual column index from the original data structure
+            const actualColIndex = selectedColumns[columnIndex]; // Map displayed index to original data index
+            const columnName = data_transform[0][actualColIndex];
+
+            currentlySortingColumnIndex = actualColIndex;
+            columnNameElement.textContent = columnName;
+
+            const rect = event.currentTarget.getBoundingClientRect();
+            popup.style.left = `${window.scrollX + rect.left}px`;
+            popup.style.top = `${window.scrollY + rect.bottom}px`; // Position below the header
+            popup.style.display = 'block';
+
+        }
+        console.log(profileName);
+
+        function afficherTableau(rowsToDisplay = null) {
+            const T = pageTranslations[currentPageLanguage];
+            let safeProfileName = profileName ? cleanProfileName(profileName) : T.noProfile;
+
+            const headerRow = data_transform[0] || [];
+            const dataRows = data_transform.slice(1);
+
+            let tableHtml = `<h1>${T.tableTitle.replace('{profileName}', safeProfileName)}</h1><table><thead><tr>`;
+
+            // Header Row Rendering with translated tooltips/placeholders
+            tableHtml += `<th>${T.selectRowsHeader}<br/><input type='checkbox' id='selectAllRowsCheckbox'></th>`;
+
+            selectedColumns.forEach((originalColIndex, displayIndex) => {
+                const headerText = headerRow[originalColIndex] !== undefined ? headerRow[originalColIndex] : `Col ${originalColIndex}`;
+                const searchInputId = `search-col-${originalColIndex}`;
+                const currentSearchValue = currentSearchCriteria[originalColIndex] || '';
+
+                tableHtml += `<th onclick="showSortOptions(${displayIndex}, event)">`; // Use displayIndex for click handler
+                tableHtml += `<input type='checkbox' class='columnSelect' value='${originalColIndex}'> `;
+                tableHtml += `${escapeHtml(headerText)}<br/>`;
+                tableHtml += `<input type='text' class='header-search' id='${searchInputId}' data-original-index='${originalColIndex}' placeholder='${T.searchPlaceholder}' value="${escapeHtml(currentSearchValue)}" onclick='event.stopPropagation();'>`;
+                tableHtml += `</th>`;
+            });
+            tableHtml += "</tr></thead><tbody>";
+
+            // Data Row Rendering
+            const rowSource = rowsToDisplay || dataRows.map((row, index) => ({ originalIndex: index + 1, rowData: row }));
+
+            if (rowSource.length > 0) {
+                rowSource.forEach(rowInfo => {
+                    const originalRowIndex = rowInfo.originalIndex;
+                    const currentRowData = rowInfo.rowData;
+                    if (!currentRowData) return;
+                    const isChecked = selectedRowIndices.has(originalRowIndex);
+
+                    tableHtml += "<tr>";
+                    tableHtml += `<td><input type='checkbox' class='rowSelect' value='${originalRowIndex}' ${isChecked ? 'checked' : ''}></td>`;
+                    selectedColumns.forEach(originalColIndex => {
+                        const cellData = currentRowData[originalColIndex] !== undefined ? currentRowData[originalColIndex] : '';
+                        tableHtml += `<td>${escapeHtml(String(cellData))}</td>`;
+                    });
+                    tableHtml += "</tr>";
+                });
+            } else {
+                const colCount = selectedColumns.length + 1;
+                tableHtml += `<tr><td colspan="${colCount}">${T.noDataRows}</td></tr>`; // Translated message
+            }
+
+            tableHtml += "</tbody></table>";
+            document.getElementById('table').innerHTML = tableHtml;
+
+            setupRowSelectionCheckboxes();
+            hideSortOptions(); // Hide sort popup after rendering
+        }
+
+        // Helper to escape HTML for safe display
+        function escapeHtml(unsafe) {
+            if (unsafe === null || unsafe === undefined) return '';
+            return String(unsafe)
+                 .replace(/&/g, "&")
+                 .replace(/</g, "<")
+                 .replace(/>/g, ">")
+                 .replace(/"/g, "")
+                 .replace(/'/g, "'");
+        }
+
+        function setupRowSelectionCheckboxes() {
+            const selectAllRowsCheckbox = document.getElementById('selectAllRowsCheckbox');
+            const rowCheckboxes = document.querySelectorAll('#table .rowSelect'); // Get newly rendered checkboxes
+
+            if (!selectAllRowsCheckbox) return;
+
+            // --- Update Select All State (Visual Only) ---
+             const updateSelectAllVisualState = () => {
+                 const totalVisibleRows = rowCheckboxes.length;
+                 // Count how many *visible* checkboxes have their index in the Set
+                 let checkedVisibleCount = 0;
+                 rowCheckboxes.forEach(cb => {
+                     if (selectedRowIndices.has(parseInt(cb.value, 10))) {
+                         checkedVisibleCount++;
+                     }
+                 });
+
+                 if (totalVisibleRows > 0) {
+                     if (checkedVisibleCount === totalVisibleRows) {
+                         selectAllRowsCheckbox.checked = true;
+                         selectAllRowsCheckbox.indeterminate = false;
+                     } else if (checkedVisibleCount === 0) {
+                         selectAllRowsCheckbox.checked = false;
+                         selectAllRowsCheckbox.indeterminate = false;
+                     } else {
+                         selectAllRowsCheckbox.checked = false;
+                         selectAllRowsCheckbox.indeterminate = true;
+                     }
+                 } else {
+                     selectAllRowsCheckbox.checked = false;
+                     selectAllRowsCheckbox.indeterminate = false;
+                 }
+             };
+
+
+            // --- Select All Rows listener ---
+            selectAllRowsCheckbox.addEventListener('change', function() {
+                const isChecking = this.checked; // Are we checking or unchecking?
+                // Iterate through ONLY the currently VISIBLE row checkboxes
+                rowCheckboxes.forEach(checkbox => {
+                    const originalIndex = parseInt(checkbox.value, 10);
+                     checkbox.checked = isChecking; // Sync visual state immediately
+                    if (isChecking) {
+                        selectedRowIndices.add(originalIndex); // Add to selection Set
+                    } else {
+                        selectedRowIndices.delete(originalIndex); // Remove from selection Set
+                    }
+                });
+                 console.log("Selection Set after Select All:", selectedRowIndices);
+            });
+
+            // --- Individual Row listeners ---
+             rowCheckboxes.forEach(checkbox => {
+                 checkbox.addEventListener('change', function() {
+                     const originalIndex = parseInt(this.value, 10);
+                     if (this.checked) {
+                         selectedRowIndices.add(originalIndex); // Add to Set
+                     } else {
+                         selectedRowIndices.delete(originalIndex); // Remove from Set
+                     }
+                     console.log("Selection Set after individual click:", selectedRowIndices);
+                     updateSelectAllVisualState(); // Update the master checkbox's visual state
+                 });
+             });
+
+             // Initial sync of the "Select All" checkbox visual state when table loads/re-renders
+             updateSelectAllVisualState();
+        }
+
+        function searchAndReorderView() {
+            const T = pageTranslations[currentPageLanguage];
+            console.log("Searching and reordering view...");
+            const searchInputs = document.querySelectorAll('#table th input.header-search');
+            currentSearchCriteria = {}; // Reset and gather current criteria
+
+            // 1. Gather Search Terms (case-insensitive) & Store Globally
+            searchInputs.forEach(input => {
+                const searchTerm = input.value.trim().toLowerCase();
+                const originalColIndex = parseInt(input.getAttribute('data-original-index'), 10);
+                if (!isNaN(originalColIndex)) {
+                    if (searchTerm) { // Only store non-empty search terms
+                       currentSearchCriteria[originalColIndex] = input.value.trim(); // Store original case for display
+                    }
+                 }
+            });
+
+            console.log("Search Criteria:", currentSearchCriteria);
+            const criteriaKeys = Object.keys(currentSearchCriteria);
+
+            // If no criteria, just show original order (handled by calling afficherTableau without args)
+            if (criteriaKeys.length === 0) {
+                alert(T.alterSearch); // Effectively resets if called with no criteria
+                return;
+            }
+
+            const matchingRows = [];
+            const nonMatchingRows = [];
+            const dataRows = data_transform.slice(1); // Rows to process
+
+            dataRows.forEach((currentRow, index) => {
+                let rowMatches = true; // Assume match
+                const originalIndex = index + 1; // 1-based index for checkbox value
+
+                for (const originalColIndexStr in currentSearchCriteria) {
+                     // Use stored original case criteria for display, but lower for comparison
+                    const searchTermLower = currentSearchCriteria[originalColIndexStr].toLowerCase();
+                    const originalColIndex = parseInt(originalColIndexStr, 10);
+                    const cellValue = (currentRow && currentRow[originalColIndex] !== undefined)
+                                    ? String(currentRow[originalColIndex]).toLowerCase()
+                                    : '';
+
+                    if (!cellValue.includes(searchTermLower)) {
+                        rowMatches = false;
+                        break;
+                    }
+                }
+
+                const rowInfo = { originalIndex: originalIndex, rowData: currentRow };
+                if (rowMatches) {
+                    matchingRows.push(rowInfo);
+                } else {
+                    nonMatchingRows.push(rowInfo);
+                }
+            });
+            if(matchingRows.length === 0){
+                alert(T.alertSearchNotFound); // Use translated alert
+                return;
+            }
+            console.log(`Found ${matchingRows.length} matching rows.`);
+            const orderedRowsForDisplay = [...matchingRows, ...nonMatchingRows];
+
+            afficherTableau(orderedRowsForDisplay);
+        }
+
+        // --- NEW Function: Clear Search Inputs & Reset View ---
+        function clearSearchAndResetView() {
+             console.log("Clearing search and resetting view...");
+             currentSearchCriteria = {}; // Clear stored criteria
+             // Now call afficherTableau without arguments to use default data_transform order
+             afficherTableau();
+        }
+
+
+
+        function getTableData() {
+                let tableData = [];
+                // Sélectionner le tableau affiché
+                const table = document.querySelector('#table table'); // Trouver le tableau dans le conteneur "table"
+                const rows = table.querySelectorAll('tr'); // Récupérer toutes les lignes du tableau
+                rows.forEach((row) => {
+                    let rowData = [];
+
+                    // Sélectionner toutes les cellules (th ou td)
+                    const cells = row.querySelectorAll('th, td');
+                    cells.forEach((cell, cellIndex) => {
+                        if (cellIndex > 0) { // Ignorer la première cellule de chaque ligne
+                            rowData.push(cell.innerText || cell.textContent);
+                        }
+                    });
+
+                    tableData.push(rowData); // Ajouter la ligne mise à jour dans le tableau final
+                });
+                return tableData;
+        }
+        // --- Sorting Logic ---
+
+    function compareValues(a, b, ascending = true) {
+        const valA = a === null || a === undefined ? '' : a;
+        const valB = b === null || b === undefined ? '' : b;
+
+        // Attempt numeric comparison first
+        const numA = parseFloat(valA);
+        const numB = parseFloat(valB);
+
+        let comparison = 0;
+
+        if (!isNaN(numA) && !isNaN(numB)) {
+            // Both are numbers
+            comparison = numA - numB;
+        } else {
+            // At least one is not a number, use string comparison
+            const strA = String(valA).toLowerCase(); // Case-insensitive string comparison
+            const strB = String(valB).toLowerCase();
+            comparison = strA.localeCompare(strB);
+        }
+
+        return ascending ? comparison : comparison * -1; // Reverse for descending
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+             // Keep existing listeners for sort buttons and close popup
+             // ... sort listeners ...
+             const T = pageTranslations[currentPageLanguage]; // Use initial default lang
+             const sortAscBtn = document.getElementById('sortAscButton');
+             const sortDescBtn = document.getElementById('sortDescButton');
+             const closePopupBtn = document.getElementById('closeSortPopup');
+             if (sortAscBtn) sortAscBtn.addEventListener('click', () => simple_sort('asc'));
+             if (sortDescBtn) sortDescBtn.addEventListener('click', () => simple_sort('desc'));
+             if (closePopupBtn) closePopupBtn.addEventListener('click', hideSortOptions);
+
+
+             // Add listener for the Search & Reorder button
+             const searchReorderBtn = document.getElementById('searchReorderButton');
+             if (searchReorderBtn) {
+                 searchReorderBtn.addEventListener('click', searchAndReorderView);
+             }
+
+             // Add listener for the Clear Search / Reset View button
+              const clearSearchResetBtn = document.getElementById('clearSearchResetViewButton');
+              if (clearSearchResetBtn) {
+                  clearSearchResetBtn.addEventListener('click', clearSearchAndResetView);
+              }
+
+             console.log("similar.js DOMContentLoaded - Listener setup complete. Waiting for user message.");
+             // ... initial loading message ...
+             const tableDiv = document.getElementById('table');
+              if (tableDiv) {
+                 tableDiv.innerHTML = `<h2>${T.loadingUserContext}</h2>`; // Translated initial message
+              }
+    });
+
+         // --- Sorting Logic (Modified to work with reordered view) ---
+          function simple_sort(sortType) {
+              console.log(`Sorting column index: ${currentlySortingColumnIndex}, type: ${sortType}`);
+              if (currentlySortingColumnIndex === -1 || !data_transform || data_transform.length < 2) {
+                  console.log("Sorting prerequisites not met.");
+                  hideSortOptions();
+                  return;
+              }
+
+              // Determine the current display order
+              const currentDisplayedRows = getCurrentDisplayOrder(); // Get { originalIndex, rowData } array
+
+              // Perform the sort on the currentDisplayedRows array
+              const ascending = (sortType === 'asc');
+              currentDisplayedRows.sort((rowAInfo, rowBInfo) => {
+                    // Compare using the actual rowData based on the sorting column index
+                    const valA = rowAInfo.rowData && rowAInfo.rowData[currentlySortingColumnIndex] !== undefined ? rowAInfo.rowData[currentlySortingColumnIndex] : null;
+                    const valB = rowBInfo.rowData && rowBInfo.rowData[currentlySortingColumnIndex] !== undefined ? rowBInfo.rowData[currentlySortingColumnIndex] : null;
+                    return compareValues(valA, valB, ascending); // Use existing compare function
+                });
+
+
+              // Update the displayed table with the sorted version of the *current* view
+              afficherTableau(currentDisplayedRows);
+          }
+
+         // Helper function to get the current displayed row order from the DOM or state
+         // This version gets it from the DOM based on checkbox values
+         function getCurrentDisplayOrder() {
+            const displayedRowsInfo = [];
+            const rowCheckboxes = document.querySelectorAll('#table tbody .rowSelect');
+             rowCheckboxes.forEach(checkbox => {
+                 const originalIndex = parseInt(checkbox.value, 10);
+                 if (!isNaN(originalIndex) && originalIndex > 0 && originalIndex <= data_transform.length - 1) {
+                     // originalIndex is 1-based from checkbox, need 0-based for data_transform[index+1]
+                     displayedRowsInfo.push({
+                         originalIndex: originalIndex,
+                         rowData: data_transform[originalIndex] // Get data from original source using index
+                     });
+                 }
+             });
+             return displayedRowsInfo;
+         }
+
+        // Fonction pour calculer la distance Euclidienne entre deux vecteurs
+        function euclideanDistance(vec1, vec2) {
+            let sum = 0;
+            for (let i = 0; i < vec1.length; i++) {
+                sum += Math.pow(vec1[i] - vec2[i], 2);
+            }
+            return Math.sqrt(sum);
+        }
+
+function trierParDistanceEuclidienne(fullRows, selectedRows, filteredRows) {
+    let ligneChoisis = [];
+    let autres = [];
+
+    // Diviser les lignes choisi avec des autres lignes
+    for (let i = 0; i < filteredRows.length; i++) {
+        if (selectedRows.includes(i + 1)) {
+            ligneChoisis.push({ original: fullRows[i], filtered: filteredRows[i] });
+        } else {
+            autres.push({ original: fullRows[i], filtered: filteredRows[i] });
+        }
+    }
+    console.log(ligneChoisis);
+    console.log(autres);
+    let distanceMin = [];
+    // Calculer par le euclidean algorithme
+    for (let i = 0; i < autres.length; i++) {
+        let distances = [];
+        for (let j = 0; j < ligneChoisis.length; j++) {
+            let dist = euclideanDistance(autres[i].filtered, ligneChoisis[j].filtered);
+            distances.push(dist);
+        }
+        let minDist = Math.min(...distances);
+        distanceMin.push({ row: autres[i].original, distance: minDist });
+    }
+
+    // Sort par le distance
+    distanceMin.sort((a, b) => a.distance - b.distance);
+    console.log(distanceMin);
+    // Return un nouveau table après similarité
+    return [
+        ...ligneChoisis.map(item => item.original),
+        ...distanceMin.map(item => item.row)
+    ];
+}
+
+function calculer_similarity() {
+    const T = pageTranslations[currentPageLanguage];
+    const selectedRows = Array.from(document.querySelectorAll('input.rowSelect:checked')).map(input => parseInt(input.value));
+    const selectedCols = Array.from(document.querySelectorAll('input.columnSelect:checked')).map(input => parseInt(input.value));
+    console.log("Selected cols: ",selectedCols);
+    console.log("Selected rows: ",selectedRows);
+
+    const tooltip = document.getElementById('computeClosestTooltip');
+    tooltip.textContent = T.computeClosestButtonTooltip; // Reset to default
+
+    if (selectedRows.length === 0) {
+        tooltip.textContent = T.computeClosestTooltipSelectPatient;
+        alert(T.alertSelectPatient);
+        return;
+    }
+    if (selectedCols.length === 0) {
+        tooltip.textContent = T.computeClosestTooltipSelectColumn;
+        alert(T.alertSelectPatient);
+        return;
+    }
+    tooltip.textContent = T.computeClosestTooltipReady;
+
+    // Des valeurs pour les colonnes on a chosi
+    const filteredRows = data_transform.slice(1).map(row => {
+        return selectedCols.map(colIndex => parseFloat(row[colIndex]) || 0);
+    });
+
+    console.log("Fil: ",filteredRows);
+    // Valeur original dans ce fichier
+    const fullRows = data_transform.slice(1).map(row => {
+        return selectedColumns.map(colIndex => row[colIndex]);
+    });
+    console.log("Full: ",fullRows);
+
+    // Données après similarité
+    const orderedData = trierParDistanceEuclidienne(fullRows, selectedRows, filteredRows);
+    console.log(orderedData);
+    const headerTable = selectedColumns.map(colIndex => {
+        if (data_transform[0] && data_transform[0][colIndex] !== undefined) {
+            return data_transform[0][colIndex];
+        } else {
+            console.warn(`Header name not found for index: ${colIndex}`);
+            return `Column ${colIndex}`; // Or return null/undefined as needed
+        }
+    });
+    // Creer un table pour des nouveau fichier .csv après similarité
+    let table_similarity = `<div class=\"table\" id=\"table\"> <h1> ${T.titleTable} ${profileName} </h1><table><thead><tr>`;
+    headerTable.forEach(header => {
+        table_similarity += `<th>${header}</th>`;
+    });
+    table_similarity += "</tr></thead><tbody>";
+
+    orderedData.forEach(row => {
+        table_similarity += "<tr>";
+        row.forEach(cell => {
+            table_similarity += `<td>${cell}</td>`;
+        });
+        table_similarity += "</tr>";
+    });
+    table_similarity += "</tbody></table></div>";
+    setUserItem('profileName',profileName);
+    setUserItem('table_similarity',table_similarity);
+    console.log("Requesting parent to load result_similarity.html");
+    window.parent.postMessage({
+        action: 'requestNavigation',
+        targetPage: 'result_similar.html',
+        targetId: 'result_similar' // The ID of the link in index.html's nav
+    }, '*');
+}
+
+
+function virtual_profile() {
+    const T = pageTranslations[currentPageLanguage];
+    const selectedRows = Array.from(document.querySelectorAll('input.rowSelect:checked')).map(input => parseInt(input.value));
+    let rows = getTableData();
+    let selectedCols = selectedColumns;
+    console.log(selectedColumns);
+    const tooltip = document.getElementById('exploreHypothesisTooltip');
+
+    tooltip.textContent = T.exploreHypothesisButtonTooltip; // Reset to default
+
+    if (selectedRows.length === 0) {
+        tooltip.textContent = T.exploreHypothesisTooltipSelectPatient;
+        alert(T.alertSelectPatient); // Translated alert
+        return;
+    }
+
+    tooltip.textContent = T.exploreHypothesisTooltipReady;
+
+    // Stocker les colonnes et les lignes dans localStorage
+    setUserItem('selectedRows',selectedRows);
+    setUserItem('selectedCols',selectedCols);
+    setUserItem('rows',rows);
+    setUserItem('profileName',profileName);
+    setUserItem('data_transform',data_transform);
+
+
+    console.log("Requesting parent to load virtual.html");
+    window.parent.postMessage({
+        action: 'requestNavigation',
+        targetPage: 'virtual.html',
+        targetId: 'virtual' // The ID of the link in index.html's nav
+    }, '*');
+}
+
+    </script>
+</body>
+</html>

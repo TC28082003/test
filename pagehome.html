@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+        <meta charset="UTF-8"/>
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Select file</title>
+        <link rel="stylesheet" href="style.css">
+</head>
+<body>
+        <!-- Add IDs to elements that need translation -->
+        <input type="file" id="csvfile">
+        <label id="selectFileLabel" for="csvfile">Select file (.csv)</label>
+
+        <div id="pageContentContainer">
+            <h2 id="loadingMessage">Loading user data...</h2>
+        </div>
+
+        <template id="pageContentTemplate">
+            <div id="table">
+                <div id="profileContainer" style="margin-bottom: 20px; text-align: center;">
+                    <h2 id="profileTitle" style="font-size: 16px; font-weight: bold; color: #007bff; margin-bottom: 10px;">
+                        <span id="profileNameLabel">Profile Name</span> : <span id="displayProfileName" style="color: #FF4500;"></span>
+                    </h2>
+                </div>
+
+                <fieldset>
+                    <legend id="datasetLegend">Dataset file</legend>
+                    <div id="fileListContainer" class="file-list">
+                        <!-- File items -->
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend id="previousSelectionsLegend">Previous selections</legend>
+                    <div id="profileListContainer" class="select-list">
+                        <!-- Profile items -->
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend id="displayColumnsLegend">Display columns</legend>
+                    <div class="select-all-container">
+                        <input type="checkbox" id="selectAllCols">
+                        <label id="selectAllLabel" for="selectAllCols">Select/Deselect All Columns</label>
+                    </div>
+                    <div id="columnDisplay" style="padding: 10px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9;">
+                        <span id="selectProfilePrompt">Please select a profile to display its columns.</span>
+                    </div>
+                </fieldset>
+
+                <div style="margin-top: 20px; text-align: center;">
+                    <!-- Add IDs to buttons -->
+                    <button id="saveProfileButton" class="button1" onclick="Save_profile()">Save profile</button>
+                    <button id="deleteProfileButton" class="button1" onclick="delete_profil()">Delete profile</button>
+                    <button id="displayPatientsButton" class="button1" onclick="simlilar_profile()">Display patients</button>
+                </div>
+            </div>
+        </template>
+        <script>
+            let currentUserId = null;     // Changed from currentUserId
+            let currentUserToken = null;  // To store the JWT for API calls
+            let rows = [];
+            let savedProfiles = {}; // Object to store saved profiles
+            let lastVisitedProfile = ""; //
+            let savedprofilesparent ={};
+            let currentPageLanguage = 'en'; // Store current language locally
+
+            const API_BASE_URL = 'https://aidiagmed.utc.fr';
+
+            // --- DOM Element References (obtained after user is set) ---
+            let fileInput;
+            let fileListContainer;
+            let profileListContainer;
+            let columnDisplay;
+            let displayProfileName;
+            let pageContentContainer; // The main container
+            let pageContentTemplate; // The template element
+            let loadingMessage; // Reference for static element
+            const pageTranslations = {
+                en: {
+                    pageTitle: "Select File",
+                    selectFileLabel: "Select file (.csv)",
+                    loadingMessage: "Loading user data...",
+                    profileNameLabel: "Profile Name",
+                    datasetLegend: "Dataset file",
+                    previousSelectionsLegend: "Previous selections",
+                    displayColumnsLegend: "Display columns",
+                    selectAllLabel: "Select/Deselect All Columns",
+                    selectProfilePrompt: "Please select a profile to display its columns.",
+                    saveProfileButton: "Save profile",
+                    deleteProfileButton: "Delete profile",
+                    displayPatientsButton: "Display patients",
+                    noneSelected: "(None Selected)",
+                    errorUserContext: "Error: User context not available. Please login again.",
+                    errorUIElements: "Error: UI elements failed to load.",
+                    alertNotCSV: "This is not a valid CSV file!",
+                    alertCannotSaveUser: "Cannot save profile: User context not loaded.",
+                    alertProfileNameEmpty: "Name of the profile cannot be empty!",
+                    alertSelectColumn: "Please select at least one column for the profile.",
+                    alertProfileExists: "Profile exists. Please choose another profile name!",
+                    alertNoProfileSelected: "No profile selected. Please select a profile from the list!",
+                    alertProfileSaved: "Profile \"{profileName}\" has been saved successfully!",
+                    alertCannotDeleteUser: "Cannot delete profile: User context not loaded.",
+                    alertSelectProfileToDelete: "Please select a valid profile to delete first.",
+                    confirmDeleteProfile: "Are you sure you want to delete the profile: \"{profileName}\"? ",
+                    confirmDeleteProfileWithChildren: "Deleting the profile \"{profileName}\" will also delete its {childCount} child selection(s):\n- {childrenList}\n\nDo you want to proceed?",
+                    alertProfileDeleted: "Profile \"{profileName}\" {childrenText}deleted successfully!",
+                    alertProfileAndChildren: "and its child selection(s) ", // Part of delete message
+                    alertCannotProceedUser: "Cannot proceed: User context not loaded in pagehome.",
+                    alertSelectColumnSimilarity: "Please select at least one column to Similarity!",
+
+                },
+                fr: {
+                    pageTitle: "Sélectionner Fichier",
+                    selectFileLabel: "Sélectionner fichier (.csv)",
+                    loadingMessage: "Chargement des données utilisateur...",
+                    profileNameLabel: "Nom du Profil",
+                    datasetLegend: "Fichier de données",
+                    previousSelectionsLegend: "Sélections précédentes",
+                    displayColumnsLegend: "Afficher colonnes",
+                    selectAllLabel: "Sélectionner/Désélectionner Toutes les Colonnes",
+                    selectProfilePrompt: "Veuillez sélectionner un profil pour afficher ses colonnes.",
+                    saveProfileButton: "Sauvegarder profil",
+                    deleteProfileButton: "Supprimer profil",
+                    displayPatientsButton: "Afficher patients",
+                    noneSelected: "(Aucun Sélectionné)",
+                    errorUserContext: "Erreur : Contexte utilisateur non disponible. Veuillez vous reconnecter.",
+                    errorUIElements: "Erreur : Échec du chargement des éléments de l'interface utilisateur.",
+                    alertNotCSV: "Ce n'est pas un fichier CSV valide !",
+                    alertCannotSaveUser: "Impossible de sauvegarder le profil : Contexte utilisateur non chargé.",
+                    alertProfileNameEmpty: "Le nom du profil ne peut pas être vide !",
+                    alertSelectColumn: "Veuillez sélectionner au moins une colonne pour le profil.",
+                    alertProfileExists: "Le profil existe déjà. Veuillez choisir un autre nom de profil !",
+                    alertNoProfileSelected: "Aucun profil sélectionné. Veuillez sélectionner un profil dans la liste !",
+                    alertProfileSaved: "Le profil \"{profileName}\" a été sauvegardé avec succès !",
+                    alertCannotDeleteUser: "Impossible de supprimer le profil : Contexte utilisateur non chargé.",
+                    alertSelectProfileToDelete: "Veuillez d'abord sélectionner un profil valide à supprimer.",
+                    confirmDeleteProfile: "Êtes-vous sûr de vouloir supprimer le profil : \"{profileName}\" ?",
+                    confirmDeleteProfileWithChildren: "La suppression du profil \"{profileName}\" supprimera également ses {childCount} sélection(s) enfant(s) :\n- {childrenList}\n\nVoulez-vous continuer ?",
+                    alertProfileDeleted: "Profil \"{profileName}\" {childrenText}supprimé avec succès !",
+                    alertProfileAndChildren: "et sa/ses sélection(s) enfant(s) ", // Partie du message de suppression
+                    alertCannotProceedUser: "Impossible de continuer : Contexte utilisateur non chargé dans pagehome.",
+                    alertSelectColumnSimilarity: "Veuillez sélectionner au moins une colonne pour Similarité !",
+                }
+            };
+    function applyLanguage(lang) {
+        if (!pageTranslations[lang]) lang = 'en'; // Fallback
+        currentPageLanguage = lang; // Store the current language
+        document.documentElement.lang = lang; // Update html tag lang attribute
+
+        const T = pageTranslations[currentPageLanguage]; // Get translations
+
+        // --- Update Static Elements (always present) ---
+        document.title = T.pageTitle;
+
+        const getselectFileLabel = document.getElementById('selectFileLabel');
+        if (getselectFileLabel) getselectFileLabel.textContent = T.selectFileLabel;
+
+
+        if (loadingMessage) loadingMessage.textContent = T.loadingMessage;
+
+        // --- Update Dynamic Elements (if they exist in the DOM) ---
+        const dynamicContentExists = !!document.getElementById('table'); // Check if template content is loaded
+
+        if (dynamicContentExists) {
+            // Find elements by ID *after* confirming they might exist
+            const profileNameLabelEl = document.getElementById('profileNameLabel');
+            const datasetLegendEl = document.getElementById('datasetLegend');
+            const previousSelectionsLegendEl = document.getElementById('previousSelectionsLegend');
+            const displayColumnsLegendEl = document.getElementById('displayColumnsLegend');
+            const selectAllLabelEl = document.getElementById('selectAllLabel');
+            const saveProfileButtonEl = document.getElementById('saveProfileButton');
+            const deleteProfileButtonEl = document.getElementById('deleteProfileButton');
+            const displayPatientsButtonEl = document.getElementById('displayPatientsButton');
+            const displayProfileNameEl = document.getElementById('displayProfileName'); // The span for the name
+
+            // Update text content only if the element was found
+            if (profileNameLabelEl) profileNameLabelEl.textContent = T.profileNameLabel;
+            if (datasetLegendEl) datasetLegendEl.textContent = T.datasetLegend;
+            if (previousSelectionsLegendEl) previousSelectionsLegendEl.textContent = T.previousSelectionsLegend;
+            if (displayColumnsLegendEl) displayColumnsLegendEl.textContent = T.displayColumnsLegend;
+            if (selectAllLabelEl) selectAllLabelEl.textContent = T.selectAllLabel;
+            if (saveProfileButtonEl) saveProfileButtonEl.textContent = T.saveProfileButton;
+            if (deleteProfileButtonEl) deleteProfileButtonEl.textContent = T.deleteProfileButton;
+            if (displayPatientsButtonEl) displayPatientsButtonEl.textContent = T.displayPatientsButton;
+
+            // Handle elements with potentially variable content
+            if (displayProfileNameEl) {
+                // If the current text is the English or French "None Selected", update it
+                const currentText = displayProfileNameEl.textContent;
+                if (currentText === pageTranslations.en.noneSelected || currentText === pageTranslations.fr.noneSelected) {
+                    displayProfileNameEl.textContent = T.noneSelected;
+                }
+            }
+        }
+
+        console.log(`pagehome language applied: ${lang}. Dynamic content ${dynamicContentExists ? 'updated' : 'not present'}.`);
+    }
+    function getAuthToken() {
+        return localStorage.getItem('authToken');
+    }
+      window.addEventListener('message', (event) => {
+        if (!event.data || !event.data.action) return;
+        console.log(`pagehome.html received message:`, event.data);
+
+        switch(event.data.action) {
+            case 'setUser':
+                const receivedUserId = event.data.uid;
+                const receivedEmail = event.data.email; // Email might be useful for display/logging
+                console.log(`pagehome received user context: ID=${receivedUserId}, Email=${receivedEmail}`);
+
+                if (!currentUserId || currentUserId !== receivedUserId) {
+                     currentUserId = receivedUserId;
+                     currentUserToken = getAuthToken(); // Get token when user is set
+
+                     if (!currentUserToken) {
+                          console.error("CRITICAL: User context received but no auth token found in localStorage!");
+                           const pageHeader = document.getElementById('pageTitleHeader') || document.getElementById('loadingMessage'); // Find loading/title element
+                           if(pageHeader) pageHeader.textContent = "Authentication Error: Token Missing. Please re-login.";
+                           window.parent.postMessage({ action: 'forceLogout' }, '*');
+                           return; // Stop initialization
+                     }
+                     console.log("User ID and Token set. Initializing page...");
+                     initializePageForUser(); // Initialize page data *after* getting user ID and token
+
+                } else if (!document.getElementById('table')) { // User same, but UI needs init
+                    console.log("User context already set, but content missing. Re-initializing...");
+                    currentUserToken = getAuthToken(); // Ensure token is available
+                     if (!currentUserToken) {
+                          console.error("CRITICAL: User context exists but no auth token found!");
+                          return;
+                     }
+                    initializePageForUser();
+                } else {
+                     console.log("User context already set and page initialized.");
+                     initializePageForUser();
+                }
+                break;
+
+            case 'setLanguage':
+                 const lang = event.data.lang;
+                 console.log(`pagehome received language: ${lang}`);
+                 applyLanguage(lang); // Apply language to static AND dynamic elements
+                 break;
+
+            default:
+                 console.log("Pagehome received unhandled message:", event.data.action);
+                 break;
+        }
+      });
+
+    async function loadUserDataFromAPI() {
+        const T = pageTranslations[currentPageLanguage];
+        if (!currentUserId || !currentUserToken) {
+            console.error("API load error: User ID or Token not set.");
+            pageContentContainer.innerHTML = `<h2>${T.errorUserContext}</h2>`;
+            return false; // Indicate failure
+        }
+        console.log(`Loading profile data via API for user ID: ${currentUserId}`);
+        pageContentContainer.innerHTML = `<h2 id="loadingMessage">${T.loadingMessage}</h2>`; // Show loading message
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/user/profile`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${currentUserToken}`, // Send the token
+                    'Accept': 'application/json' // Indicate we expect JSON
+                }
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text(); // Get error details
+                console.error("Error fetching user profile data from API:", response.status, errorText);
+                if (response.status === 401 || response.status === 403) {
+                     pageContentContainer.innerHTML = `<h2>Session Expired or Invalid. Please login again.</h2>`;
+                     window.parent.postMessage({ action: 'forceLogout' }, '*');
+                } else {
+                     pageContentContainer.innerHTML = `<h2 style="color:red;">Error loading user data (${response.status}). See console for details.</h2>`;
+                }
+                return false; // Indicate failure
+            }
+
+            const data = await response.json();
+            savedProfiles = data.savedProfiles || {};
+            savedprofilesparent = data.savedprofilesparent || {};
+            lastVisitedProfile = data.lastVisitedProfile || '';
+            // virtualProfiles = data.virtualProfiles || {};
+            // virtualProfilesData = data.virtualProfilesData || {};
+
+            console.log("API profile data loaded successfully.");
+            return true; // Indicate success
+
+        } catch (error) {
+            console.error("Network error fetching user data from API:", error);
+            pageContentContainer.innerHTML = `<h2 style="color:red;">Network Error: Could not connect to server to load data.</h2>`;
+            return false; // Indicate failure
+        }
+    }
+
+async function initializePageForUser() { // << Make Async
+    const T = pageTranslations[currentPageLanguage];
+
+    if (!currentUserId || !currentUserToken) {
+            console.error("Initialization cannot proceed: User ID or Token missing.");
+            pageContentContainer = document.getElementById('pageContentContainer');
+            pageContentContainer.innerHTML = `<h2>${T.errorUserContext}</h2>`;
+            return;
+    }
+    console.log(`Initializing pagehome for user UID: ${currentUserId}`);
+
+    const dataLoaded = await loadUserDataFromAPI();
+    if (!dataLoaded) {
+        console.error("Failed to load user data from Firestore. Aborting UI setup.");
+        return; // Stop execution
+    }
+
+    pageContentContainer = document.getElementById('pageContentContainer');
+    pageContentTemplate = document.getElementById('pageContentTemplate');
+
+    pageContentContainer.innerHTML = '';
+    pageContentContainer.appendChild(pageContentTemplate.content.cloneNode(true));
+
+    fileInput = document.getElementById('csvfile');
+    fileListContainer = document.getElementById("fileListContainer");
+    profileListContainer = document.getElementById("profileListContainer");
+    columnDisplay = document.getElementById("columnDisplay");
+    displayProfileName = document.getElementById("displayProfileName");
+    loadingMessage = document.getElementById('loadingMessage'); // Ref not strictly needed now
+
+    if (!fileInput || !fileListContainer || !profileListContainer || !columnDisplay || !displayProfileName) {
+        console.error("CRITICAL: One or more required UI elements not found after template injection.");
+        pageContentContainer.innerHTML = `<h2>${T.errorUIElements}</h2>`;
+        return; // Stop execution
+    }
+
+    applyLanguage(currentPageLanguage); // Make sure this updates all necessary elements by ID
+
+    fileInput.addEventListener("change", prend_fichier); // 'prend_fichier' should now save to Firestore
+
+    updateFileList(); // Uses global `savedProfiles` and `savedprofilesparent` loaded from Firestore
+    if (displayProfileName) {
+        displayProfileName.textContent = T.noneSelected;
+    }
+    const promptSpan = document.getElementById('selectProfilePrompt'); // Ensure this element exists in template
+    if (promptSpan) {
+        promptSpan.textContent = T.selectProfilePrompt;
+    }
+     if (profileListContainer) { // Clear profile list initially
+         profileListContainer.innerHTML = "";
+     }
+
+    if (lastVisitedProfile && savedProfiles[lastVisitedProfile]) {
+        console.log(`Attempting to restore last visited profile: ${lastVisitedProfile}`);
+        let profileToDisplay = lastVisitedProfile;
+        let currentParentKey = `${profileToDisplay}_parent`;
+        let safetyCounter = 0; // Prevent infinite loops
+        const MAX_DEPTH = 20;
+
+        while (savedprofilesparent[currentParentKey] && safetyCounter < MAX_DEPTH) {
+            profileToDisplay = savedprofilesparent[currentParentKey];
+            currentParentKey = `${profileToDisplay}_parent`;
+            safetyCounter++;
+        }
+        if (safetyCounter >= MAX_DEPTH) {
+            console.warn("Reached max depth while searching for root profile. Displaying last known valid parent.");
+        }
+
+
+        console.log(`Determined root profile to display based on last visited: ${profileToDisplay}`);
+
+        // Ensure the determined root profile actually exists
+        if (savedProfiles[profileToDisplay]) {
+            display_profile(profileToDisplay);
+
+            if (profileToDisplay !== lastVisitedProfile) {
+                 console.log(`Last visited profile (${lastVisitedProfile}) was a child. Ensuring its details are shown.`);
+                 // Assuming display_profile doesn't automatically show child columns, explicitly call it:
+                 display_profile_colums(lastVisitedProfile); // Uncomment if needed
+            }
+             // Ensure the main profile name display reflects the *last selected* item
+             if(displayProfileName) {
+                  displayProfileName.textContent = lastVisitedProfile;
+             }
+
+
+        } else {
+            console.warn(`Root profile '${profileToDisplay}' derived from last visited '${lastVisitedProfile}' not found in loaded data. Resetting UI.`);
+            if (displayProfileName) displayProfileName.textContent = T.noneSelected;
+            if (profileListContainer) profileListContainer.innerHTML = "";
+            if (columnDisplay && promptSpan) columnDisplay.innerHTML = `<span id="selectProfilePrompt">${promptSpan.textContent}</span>`; // Reset column display
+            lastVisitedProfile = ""; // Clear the invalid stored value from local state
+        }
+
+    } else {
+            console.log("No valid last visited profile found or no profiles exist.");
+             if (lastVisitedProfile) { // Clear invalid local state
+                  lastVisitedProfile = "";
+             }
+    }
+
+    console.log("Pagehome initialization complete.");
+}
+
+// Fonction pour lire le fichier CSV
+function prend_fichier(event) {
+    const fichier = event.target.files[0]; // Récupérer le fichier sélectionné
+    if (fichier) {
+        const lire = new FileReader();
+        lire.onload = function (e) {
+            const content = e.target.result;
+            display_list_profiles(content, fichier); // Appeler affichage avec le contenu du fichier
+        };
+        lire.readAsText(fichier);
+    } else {
+        console.error("No files selected");
+    }
+}
+
+function detectDelimiter(content) {
+       const delimiters = [",", ";", "\t"]; // Liste des délimiteurs possibles
+       let detected = ",";
+       let maxCols = 0;
+
+       delimiters.forEach(delim => {
+           const numCols = content.split("\n")[0].split(delim).length;
+           if (numCols > maxCols) {
+               maxCols = numCols;
+               detected = delim;
+           }
+       });
+       return detected;
+}
+
+function normalizeLineEndings(content) {
+    // Remplace d'abord \r\n (Windows) en \n, puis remplace tous les \r en \n
+    console.log("Sucess repalce!");
+    return content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function isCSVFormat(content) {
+    const normalizedContent = normalizeLineEndings(content); // Normaliser le contenu
+    const delimiter = detectDelimiter(normalizedContent);
+    const lines = content.trim()
+        .split("\n")
+        .filter(line => line.trim() !== ""); // Retirer les lignes vides
+
+    const nbColumns = lines[0].split(delimiter).length; // Compter le nombre de colonnes de la première ligne
+
+    // Vérifier chaque ligne pour s'assurer qu'elles ont le même nombre de colonnes
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].split(delimiter).length !== nbColumns) {
+            return false; // Retourner faux si une ligne a un nombre de colonnes différent
+        }
+    }
+
+    return true;
+}
+
+
+
+async function display_list_profiles(contenu, fichier) {
+    const T = pageTranslations[currentPageLanguage];
+    if (!currentUserId) { // Check UID
+        alert(T.errorUserContext); return;
+    }
+
+    if (!isCSVFormat(contenu)) {
+        alert("This is not a valid CSV file!");
+        return;
+    }
+
+    const normalizedContent = normalizeLineEndings(contenu); // Normaliser le contenu
+    const delimiter = detectDelimiter(normalizedContent); // Détecter le délimiteur
+    const lines = normalizedContent.split("\n").filter((line) => line.trim() !== ""); // Éviter les lignes vides
+
+    if (lines.length === 0) return;
+
+    // Stocker les lignes pour un accès ultérieur
+    rows = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const lignes_i = lines[i].split(delimiter); // Utiliser le délimiteur correct
+        rows.push(lignes_i); // Ajouter les lignes dans le tableau
+    }
+    delete_delimiter();
+    retirerLignesVides();
+    let totalData = {};
+
+    // Parcourir les index des colonnes sélectionnées et les remplir avec leurs données
+    for(let j = 0; j < rows[0].length; j++) {
+        totalData[rows[0][j]] = [];
+        for (let i = 1; i < rows.length; i++) { // Ignorer la première ligne (en-têtes)
+            if (rows[i] && rows[i][j] !== undefined) {
+                totalData[rows[0][j]].push(rows[i][j]);
+            }
+        }
+    }
+
+    const originalProfileName = fichier.name;
+    const sanitizedProfileName = sanitizeKeyForFirestore(originalProfileName);
+
+    savedProfiles[sanitizedProfileName] = totalData;
+    const success = await saveUserDataToAPI(); // Use helper function
+    if (success) {
+        console.log(`Profile "${sanitizedProfileName}" from CSV saved successfully.`);
+        updateFileList();
+        display_profile(sanitizedProfileName); // Display the new profile
+    } else {
+        console.error(`Failed to save profile "${sanitizedProfileName}" via API.`);
+        delete savedProfiles[sanitizedProfileName];
+        alert(`Error: Could not save profile "${sanitizedProfileName}" to the server.`);
+        updateFileList();
+    }
+}
+
+
+// Fonction pour sauvegarder un profil
+async function Save_profile() {
+    const T = pageTranslations[currentPageLanguage]; // Get current translations
+    if (!currentUserId || !currentUserToken) { alert(T.alertCannotSaveUser); return; }
+    let profileNameparent = lastVisitedProfile ;
+    const profileName1 = prompt(T.alertProfileNameEmpty); // Use translated prompt text if needed (or keep simple)
+    const profileName= sanitizeKeyForFirestore(profileName1);
+    const profileNameData = lastVisitedProfile;
+    let selectedCols = Array.from(document.querySelectorAll('input.colSelect:checked')).map(input => parseInt(input.value));
+    // Vérifier si un nom a été saisi
+    if (!profileName || profileName.trim() === "") {
+        alert(T.alertProfileNameEmpty); // Use translated message
+        return;
+    }
+
+    if (selectedCols.length === 0) {
+        alert(T.alertSelectColumn); // Use translated message
+        return;
+    }
+
+    if( savedProfiles[profileName] ) {
+        alert(T.alertProfileExists); // Use translated message
+        return;
+    }
+
+    if (!profileNameData || profileNameData === "(Aucun)") {
+        alert(T.alertNoProfileSelected); // Use translated message
+        return;
+    }
+
+    // Récupérer les données du profil
+    const profileData = savedProfiles[profileNameData];
+    let rows = [];
+
+    console.log(profileData);
+    // Ajouter les noms des colonnes comme première ligne
+    const columnNames = Object.keys(profileData); // Obtenir les clés des colonnes
+    rows.push(columnNames); // Première ligne avec les noms des colonnes
+
+    // Trouver le nombre maximum de lignes nécessaire
+    const maxRows = Math.max(...Object.values(profileData).map(col => col.length));
+
+    // Ajouter les données ligne par ligne
+    for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+        let row = columnNames.map(colName => profileData[colName][rowIndex] || ""); // Extraire les données par colonne
+        rows.push(row);
+    }
+
+    // Créer un objet pour stocker les colonnes sélectionnées et leurs valeurs
+    let selectedData = {};
+
+    // Parcourir les index des colonnes sélectionnées et les remplir avec leurs données
+    selectedCols.forEach(colIndex => {
+        selectedData[rows[0][colIndex]] = [];
+        for (let i = 1; i < rows.length; i++) { // Ignorer la première ligne (en-têtes)
+            if (rows[i] && rows[i][colIndex] !== undefined) {
+                selectedData[rows[0][colIndex]].push(rows[i][colIndex]);
+            }
+        }
+    });
+    savedProfiles[profileName] = selectedData;
+
+    let profile_parent = profileName + "_parent";
+    let profile_parent_parent = profileNameparent + "_parent";
+    while(savedprofilesparent[profile_parent_parent]) {
+        profileNameparent = savedprofilesparent[profile_parent_parent];
+        console.log("profilenameparent: ",profileNameparent);
+        profile_parent_parent = profileNameparent + "_parent";
+    }
+    savedprofilesparent[profile_parent] = profileNameparent;
+    lastVisitedProfile = profileName; // Assume saving makes it the current one
+    console.log("Profilename: ",profileName);
+    console.log("Profilename parent: ",profileNameparent);
+    console.log(`Attempting to save new sub-profile "${profileName}" via API...`);
+    const success = await saveUserDataToAPI(); // Use helper
+    if (success) {
+        console.log(`Sub-profile "${profileName}" saved successfully.`);
+        updateFileList();
+        display_profile(profileNameparent);
+        if (displayProfileName) displayProfileName.textContent = profileName;
+        alert(T.alertProfileSaved.replace('{profileName}', profileName));
+    } else {
+        console.error(`Failed to save sub-profile "${profileName}" via API.`);
+        delete savedProfiles[profileName];
+        delete savedprofilesparent[`${profileName}_parent`];
+        lastVisitedProfile = profileNameparent;
+        alert(`Error: Could not save profile "${profileName}" to the server.`);
+        display_profile(profileNameparent);
+    }
+}
+
+function updateFileList() {
+    const fileListContainer = document.getElementById("fileListContainer");
+    if (!fileListContainer) {
+        return;
+    }
+
+    // Nettoyer le conteneur pour éviter les doublons
+    fileListContainer.innerHTML = "";
+
+    // Ajouter un bouton pour chaque profil dans `savedProfiles`
+    Object.keys(savedProfiles).forEach((profileName) => {
+        let profile_parent = profileName + "_parent";
+        if(!savedprofilesparent[profile_parent]) {
+            const profileButton = document.createElement("button");
+            profileButton.textContent = profileName;
+            profileButton.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin: 5px 0;
+                color: white;
+                background-color: #007bff;
+                border: none;
+                border-radius: 30px;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.3s ease-in-out;
+                text-align: center;
+            `;
+
+            // Ajouter un événement 'click'
+        profileButton.onclick = () => {
+            // Réinitialiser la couleur de tous les boutons
+            Array.from(fileListContainer.children).forEach((btn) => {
+                btn.style.backgroundColor = "#007bff"; // Couleur par défaut
+            });
+
+            // Changer la couleur du bouton cliqué
+            profileButton.style.backgroundColor = "#28a745"; // Couleur par exemple 'vert'
+            display_profile(profileName);
+    };
+
+        // Ajouter le bouton au conteneur
+        fileListContainer.appendChild(profileButton);
+        }
+    });
+
+
+}
+
+function display_profile(profileName) {
+    const profileListContainer = document.getElementById("profileListContainer");
+    if (!profileName || profileName === "(Aucun)") {
+        alert("No profile selected. Please select a profile from the list!");
+        return;
+    }
+
+    if (!profileListContainer) {
+        return;
+    }
+
+    const visitedProfiles = new Set();
+    // Nettoyer le conteneur pour éviter les doublons
+    profileListContainer.innerHTML = "";
+
+    // Ajouter un bouton pour chaque profil dans `savedProfiles`
+    Object.keys(savedProfiles).forEach((childProfile) => {
+        if (visitedProfiles.has(childProfile)) return;
+        let profile_parent = childProfile + "_parent";
+        if (savedprofilesparent[profile_parent] === profileName) {
+            const profileButton = document.createElement("button");
+            profileButton.textContent = childProfile;
+            profileButton.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin: 5px 0;
+                color: white;
+                background-color: #007bff;
+                border: none;
+                border-radius: 30px;
+                font-size: 14px;
+                cursor: pointer;
+                transition: all 0.3s ease-in-out;
+                text-align: center;
+            `;
+
+            // Ajouter un événement 'click'
+        profileButton.onclick = () => {
+            // Réinitialiser la couleur de tous les boutons
+            Array.from(profileListContainer.children).forEach((btn) => {
+                btn.style.backgroundColor = "#007bff"; // Couleur par défaut
+            });
+
+            // Changer la couleur du bouton cliqué
+            profileButton.style.backgroundColor = "#28a745"; // Couleur par exemple 'vert'
+            display_profile_colums(childProfile);
+        };
+
+            // Ajouter le bouton au conteneur
+            profileListContainer.appendChild(profileButton);
+        }
+    });
+        display_profile_colums(profileName);
+}
+            function display_profile_colums(profileName) {
+                const T = pageTranslations[currentPageLanguage];
+                const profileData = savedProfiles[profileName];
+                const columnDisplayContainer = document.getElementById("columnDisplay"); // Get the container div
+
+                if (!profileData || !columnDisplayContainer) {
+                    // Clear display if no data or container not found
+                    if (columnDisplayContainer) {
+                        columnDisplayContainer.innerHTML = "Profile data not found or container missing.";
+                    }
+                    document.getElementById("displayProfileName").textContent = T.noneSelected; // Translate fallback
+                    lastVisitedProfile = "";
+                    return;
+                }
+
+                const columnHeaders = Object.keys(profileData); // The columns (the keys)
+                let htmlContent = "";
+
+                // 2. Add the grid container for individual checkboxes
+                 htmlContent += "<div class='display-columns'>"; // Start the grid container
+
+                // 3. Generate individual column checkboxes within the grid container
+                for (let j = 0; j < columnHeaders.length; j++) {
+                     // Use unique IDs for labels and inputs
+                     const checkboxId = `col_check_${j}`;
+                     htmlContent += `
+                        <div>
+                            <input type="checkbox" class="colSelect" id="${checkboxId}" value="${j}">
+                            <label for="${checkboxId}">${columnHeaders[j]}</label>
+                        </div>`;
+                 }
+                 htmlContent += "</div>"; // Close the grid container
+
+                // 4. Set the generated HTML to the container
+                columnDisplayContainer.innerHTML = htmlContent;
+
+                // 5. Update the displayed profile name and store the last visited
+                document.getElementById("displayProfileName").textContent = profileName;
+                lastVisitedProfile = profileName;
+
+                // 6. Add Event Listeners *after* HTML is in the DOM
+                const selectAllCheckbox = document.getElementById('selectAllCols');
+                const individualCheckboxes = columnDisplayContainer.querySelectorAll('.colSelect'); // Select only within this container
+
+                if (selectAllCheckbox && individualCheckboxes.length > 0) {
+                    // Listener for the "Select All" checkbox
+                    selectAllCheckbox.addEventListener('change', function() {
+                        const isChecked = this.checked;
+                        individualCheckboxes.forEach(checkbox => {
+                            checkbox.checked = isChecked;
+                        });
+                    });
+
+                    // Listener for individual checkboxes (to update "Select All")
+                    individualCheckboxes.forEach(checkbox => {
+                        checkbox.addEventListener('change', function() {
+                            const total = individualCheckboxes.length;
+                            const checkedCount = columnDisplayContainer.querySelectorAll('.colSelect:checked').length;
+
+                            if (checkedCount === total) {
+                                selectAllCheckbox.checked = true;
+                                selectAllCheckbox.indeterminate = false; // Not indeterminate if all are checked
+                            } else if (checkedCount === 0) {
+                                selectAllCheckbox.checked = false;
+                                selectAllCheckbox.indeterminate = false; // Not indeterminate if none are checked
+                            } else {
+                                // Some are checked, but not all
+                                selectAllCheckbox.checked = false; // Uncheck the main box
+                                selectAllCheckbox.indeterminate = true; // Set indeterminate state (optional but good UX)
+                            }
+                        });
+                    });
+
+                    // Initial state sync for "Select All" checkbox on load
+                    const initialCheckedCount = columnDisplayContainer.querySelectorAll('.colSelect:checked').length;
+                     if (initialCheckedCount === individualCheckboxes.length) {
+                         selectAllCheckbox.checked = true;
+                         selectAllCheckbox.indeterminate = false;
+                     } else if (initialCheckedCount === 0) {
+                         selectAllCheckbox.checked = false;
+                         selectAllCheckbox.indeterminate = false;
+                     } else {
+                         selectAllCheckbox.checked = false;
+                         selectAllCheckbox.indeterminate = true;
+                     }
+
+                } else if (selectAllCheckbox) {
+                     // Disable select all if there are no individual checkboxes
+                     selectAllCheckbox.disabled = true;
+                }
+            }
+
+            async function delete_profil() {
+                const T = pageTranslations[currentPageLanguage];
+                if (!currentUserId || !currentUserToken) { alert(T.alertCannotDeleteUser); return; }
+
+                // Ensure global elements are accessible if needed for reset
+                const displayProfileName = document.getElementById("displayProfileName");
+                const profileListContainer = document.getElementById("profileListContainer");
+                const columnDisplay = document.getElementById("columnDisplay");
+
+                const profileNameToDelete = lastVisitedProfile;
+
+                if (!profileNameToDelete || !savedProfiles[profileNameToDelete]) {
+                    alert(T.alertSelectProfileToDelete);
+                    // Clear selection potentially if invalid profile was stored
+                    if (profileNameToDelete && !savedProfiles[profileNameToDelete]) {
+                         lastVisitedProfile = "";
+                         if(displayProfileName) displayProfileName.textContent = "(None Selected)";
+                         if(profileListContainer) profileListContainer.innerHTML = "";
+                         if(columnDisplay) columnDisplay.innerHTML = "Select a profile to display columns.";
+                         updateFileList(); // Refresh list even on error correction
+                    }
+                    return;
+                }
+
+                // 1. Determine if it's a base profile and find children (for warning message)
+                let childrenToDelete = [];
+                let isBaseProfile = true; // Assume base unless found as a value in savedprofilesparent
+                const parentLinkKeyForDeleted = `${profileNameToDelete}_parent`; // Key if this profile IS a child
+
+                // Check if profileNameToDelete exists as a value (meaning it's someone's child)
+                for (const key in savedprofilesparent) {
+                    if (savedprofilesparent[key] === profileNameToDelete) {
+                         // This profile is a parent to the profile associated with 'key'
+                         let childName = key.replace(/_parent$/, '');
+                         if (savedProfiles[childName]) { // Check if child actually exists
+                             childrenToDelete.push(childName);
+                         }
+                    }
+                    // Check if profileNameToDelete exists as a key (meaning it IS a child)
+                    if (key === parentLinkKeyForDeleted) {
+                        isBaseProfile = false; // It is a child, not a base profile
+                    }
+                }
+
+
+                // 2. Find the parent's name *before* deleting relationships
+                let parentProfileName = null;
+                if (savedprofilesparent[parentLinkKeyForDeleted]) {
+                    parentProfileName = savedprofilesparent[parentLinkKeyForDeleted];
+                    console.log(`Profile "${profileNameToDelete}" has parent: "${parentProfileName}"`);
+                } else {
+                     console.log(`Profile "${profileNameToDelete}" is a base profile or its parent link is missing.`);
+                }
+
+                let confirmMessage = T.confirmDeleteProfile.replace('{profileName}', profileNameToDelete);
+                if (childrenToDelete.length > 0) {
+                    let str = ""+childrenToDelete.length;
+                    confirmMessage = T.confirmDeleteProfileWithChildren
+                        .replace('{profileName}', profileNameToDelete)
+                        .replace('{childCount}', str)
+                        .replace('{childrenList}', childrenToDelete.join("\n- "));
+                }
+
+                if (!confirm(confirmMessage)) {
+                    return; // User cancelled
+                }
+
+                console.log(`Deleting profile: "${profileNameToDelete}"`);
+                const updatedSavedProfiles = { ...savedProfiles };
+                const updatedSavedProfilesParent = { ...savedprofilesparent };
+
+                delete updatedSavedProfiles[profileNameToDelete];
+                delete updatedSavedProfilesParent[parentLinkKeyForDeleted];
+                childrenToDelete.forEach(childName => {
+                    delete updatedSavedProfiles[childName];
+                    delete updatedSavedProfilesParent[`${childName}_parent`];
+                });
+
+
+                let profileToSelectAfterDelete = null;
+                if (parentProfileName && savedProfiles[parentProfileName] && parentProfileName !== profileNameToDelete) {
+                    // Ensure parent still exists AND is not the one being deleted
+                    profileToSelectAfterDelete = parentProfileName;
+                }
+                const updatedLastVisitedProfile = profileToSelectAfterDelete || ""; // Update last visited
+                console.log(`Attempting to delete profile "${profileNameToDelete}" and children via API...`);
+                savedProfiles = updatedSavedProfiles;
+                savedprofilesparent = updatedSavedProfilesParent;
+                lastVisitedProfile = updatedLastVisitedProfile;
+                const success = await saveUserDataToAPI(); // Use helper
+                if (success) {
+                    console.log(`Profile "${profileNameToDelete}" and children deleted successfully.`);
+                    updateFileList(); // Refresh root list
+
+                    if (profileToSelectAfterDelete && updatedSavedProfiles[profileToSelectAfterDelete]) {
+                         const isRoot = !updatedSavedProfilesParent[`${profileToSelectAfterDelete}_parent`];
+                         if(isRoot) {
+                              display_profile(profileToSelectAfterDelete); // Display root
+                         } else {
+                               let parentToShow = updatedSavedProfilesParent[`${profileToSelectAfterDelete}_parent`];
+                               display_profile(parentToShow); // Show parent
+                               display_profile_colums(profileToSelectAfterDelete); // Show child columns
+                         }
+                          if(displayProfileName) displayProfileName.textContent = profileToSelectAfterDelete;
+                    } else {
+                        if(displayProfileName) displayProfileName.textContent = T.noneSelected;
+                        if(profileListContainer) profileListContainer.innerHTML = "";
+                        if(columnDisplay) columnDisplay.innerHTML = `<span id="selectProfilePrompt">${T.selectProfilePrompt}</span>`;
+                    }
+
+                    const childrenText = childrenToDelete.length > 0 ? T.alertProfileAndChildren : '';
+                    alert(T.alertProfileDeleted.replace('{profileName}', profileNameToDelete).replace('{childrenText}', childrenText));
+
+                } else {
+                    console.error(`Failed to delete profile "${profileNameToDelete}" via API.`);
+                     alert(`Error: Could not delete profile "${profileNameToDelete}" on the server.`);
+                     await initializePageForUser(); // Reload original state
+                }
+            }
+             async function saveUserDataToAPI() {
+                    if (!currentUserId || !currentUserToken) {
+                        console.error("Cannot save data: User ID or Token missing.");
+                        return false;
+                    }
+                    console.log("Sending updated user data to API...");
+
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/user/profile`, {
+                            method: 'PUT', // Using PUT to replace the entire data object
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${currentUserToken}`
+                            },
+                            body: JSON.stringify({ // Send the current state of global variables
+                                savedProfiles: savedProfiles,
+                                savedprofilesparent: savedprofilesparent,
+                                lastVisitedProfile: lastVisitedProfile,
+                                // Include virtual data if it's part of the same structure
+                                virtualProfiles: getUserItem('virtualProfiles', {}), // Assuming stored locally for now
+                                virtualProfilesData: getUserItem('virtualProfilesData', {}) // Assuming stored locally
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const errorText = await response.text();
+                            console.error("Error saving user data to API:", response.status, errorText);
+                            return false; // Indicate failure
+                        }
+
+                        const result = await response.json(); // Get success message
+                        console.log("API save successful:", result.message);
+                        return true; // Indicate success
+
+                    } catch (error) {
+                        console.error("Network error saving user data:", error);
+                        return false; // Indicate failure
+                    }
+             }
+
+            function simlilar_profile() {
+                const T = pageTranslations[currentPageLanguage];
+                if (!currentUserId) { alert(T.alertCannotProceedUser); return; }
+
+
+                let selectedColumns = Array.from(document.querySelectorAll('input.colSelect:checked')).map((input) =>
+                    parseInt(input.value)
+                );
+                const profileName = lastVisitedProfile;
+
+                if (!profileName || profileName === "(Aucun)") {
+                    alert(T.alertNoProfileSelected);
+                    return;
+                }
+                const profileData = savedProfiles[profileName];
+                let data_transform = [];
+
+                // --- Data preparation logic (keep as is) ---
+                const columnNames = Object.keys(profileData);
+                data_transform.push(columnNames);
+                const maxRows = Math.max(...Object.values(profileData).map(col => col.length));
+                for (let rowIndex = 0; rowIndex < maxRows; rowIndex++) {
+                    let row = columnNames.map(colName => profileData[colName][rowIndex] || "");
+                    data_transform.push(row);
+                }
+                // --- End Data preparation ---
+
+                if (savedprofilesparent[profileName + "_parent"]) {
+                    let length_data = data_transform[0].length;
+                    if (selectedColumns.length === 0) {
+                        selectedColumns = [...Array(length_data)].map((_, index) => index);
+                    }
+                } else {
+                    if (selectedColumns.length === 0) {
+                        alert(T.alertSelectColumnSimilarity);
+                        return;
+                    }
+                }
+
+                // --- Save data to localStorage (keep as is) ---
+                console.log("Saving data for similarity:", {selectedColumns, data_transform, profileName});
+                setUserItem('selectedColumns', selectedColumns);
+                setUserItem('data_transform', data_transform);
+                setUserItem('profileName', profileName);
+                setUserItem('savedProfiles',savedProfiles);
+                setUserItem('savedprofilesparent',savedprofilesparent);
+                setUserItem('lastVisitedProfile',lastVisitedProfile);
+                // --- End Save data ---
+
+
+                // --- Ask parent (index.html) to navigate ---
+                console.log("Requesting parent to load similarity.html");
+                window.parent.postMessage({
+                    action: 'requestNavigation',
+                    targetPage: 'similarity.html',
+                    targetId: 'similarity' // The ID of the link in index.html's nav
+                }, '*');
+
+            }
+
+            function delete_delimiter() {
+                if (rows.length === 0) {
+                    console.error("No data available for processing.");
+                    return;
+                }
+
+                // Parcourir chaque ligne de données
+                for (let i = 0; i < rows.length; i++) {
+                    for (let j = 0; j < rows[i].length; j++) {
+                        // Supprimer les guillemets simples ou doubles autour de chaque cellule
+                        rows[i][j] = rows[i][j].trim().replace(/^['"]|['"]$/g, '');
+                    }
+                }
+
+                console.log("Delimiters successfully removed!");
+                console.log(rows); // Affiche les données nettoyées
+            }
+            function retirerLignesVides() {
+                if (rows.length === 0) {
+                    console.error("No data available for processing.");
+                    return;
+                }
+
+                 rows = rows.filter(row => {
+                    // Vérifier si au moins une des colonnes dans une ligne n'est pas vide
+                    return row.some(value => value.trim() !== "");
+                });
+
+                console.log("Empty lines removed. Here is the updated data:");
+                console.log(rows);
+            }
+            function getUserStorageKey(baseKey) {
+                if (!currentUserId) {
+                    return null; // Or throw an error
+                }
+                return `${currentUserId}_${baseKey}`;
+            }
+
+            function setUserItem(baseKey, value) {
+                const userKey = getUserStorageKey(baseKey);
+                if (userKey) {
+                    localStorage.setItem(userKey, JSON.stringify(value));
+                }
+            }
+
+            function getUserItem(baseKey, defaultValue = null) {
+                const userKey = getUserStorageKey(baseKey);
+                if (!userKey) return defaultValue;
+                try {
+                    const item = localStorage.getItem(userKey);
+                    return item ? JSON.parse(item) : defaultValue;
+                } catch (e) {
+                    console.error(`Error parsing user item ${userKey}:`, e);
+                    return defaultValue;
+                }
+            }
+
+            function sanitizeKeyForFirestore(key) {
+                if (!key) return '';
+                return key.replace(/\./g, '')
+                          .replace(/\[/g, '')
+                          .replace(/\*/g, '')
+                          .replace(/\//g, '');
+            }
+
+
+            const initialLang = localStorage.getItem('appLanguage') || 'en';
+            applyLanguage(initialLang); // Apply initial language texts
+            const initialT = pageTranslations[initialLang];
+            pageContentContainer = document.getElementById('pageContentContainer');
+            if (pageContentContainer) pageContentContainer.innerHTML = `<h2>${initialT.loadingMessage}</h2>`; // Show loading initially
+            console.log("pagehome.html script loaded. Waiting for 'setUser' message...");
+
+            // Request initial language from parent on load
+            if (window.parent) {
+                window.parent.postMessage({ action: 'requestLanguage' }, '*'); // Ask parent for current lang
+            }
+        </script>
+</body>
+</html>

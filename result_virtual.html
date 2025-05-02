@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en"> <!-- Default lang, updated by JS -->
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Virtual Patients Result</title> <!-- Default title, updated by JS -->
+        <link rel="stylesheet" href="style_table.css">
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <!-- Container for the result table -->
+        <div id="table-container">
+             <h2>Loading results...</h2> <!-- Placeholder -->
+        </div>
+        <br>
+        <button class="button1" id="downloadButton" onclick="export_en_CSV()" disabled>Download result
+            <span class="tooltip" id="downloadTooltip">Click here to download result.</span> <!-- Added ID -->
+        </button>
+
+        <script>
+            let tableHtmlContent = null; // Stores the HTML string of the table from localStorage
+            let profileName = null;      // Stores the profile name for the download filename
+            let currentUserId  = null; // Stores the current user
+
+            // --- START: Language Translation ---
+            let currentPageLanguage = 'en'; // Default
+
+            const pageTranslations = {
+                en: {
+                    pageTitle: "Virtual Patients Result",
+                    loadingResults: "Loading results...",
+                    errorUserContext: "Error: User context not loaded. Please try reloading or logging in again.",
+                    errorNoResults: "No result data found for profile \"{profileName}\" for user {currentUserId}. Please go back and compute virtual patient similarity first.",
+                    errorDisplayingTable: "Error displaying table content.",
+                    downloadButtonText: "Download Result",
+                    downloadButtonTooltip: "Click here to download the results as a CSV file.",
+                    alertNoTableElement: "Could not find the table element to export.",
+                    alertNoDataToExport: "No data found in the table to export.",
+                    downloadFilenamePrefix: "Result_virtual_",
+                    defaultFilename: "virtual_results"
+                },
+                fr: {
+                    pageTitle: "Résultat Patients Virtuels",
+                    loadingResults: "Chargement des résultats...",
+                    errorUserContext: "Erreur : Contexte utilisateur non chargé. Veuillez recharger ou vous reconnecter.",
+                    errorNoResults: "Aucune donnée de résultat trouvée pour le profil \"{profileName}\" pour l'utilisateur {currentUserId}. Veuillez retourner en arrière et calculer la similarité patient virtuel d'abord.",
+                    errorDisplayingTable: "Erreur lors de l'affichage du contenu de la table.",
+                    downloadButtonText: "Télécharger Résultat",
+                    downloadButtonTooltip: "Cliquez ici pour télécharger les résultats en fichier CSV.",
+                    alertNoTableElement: "Impossible de trouver l'élément table à exporter.",
+                    alertNoDataToExport: "Aucune donnée trouvée dans la table à exporter.",
+                    downloadFilenamePrefix: "Resultat_virtuel_",
+                    defaultFilename: "resultats_virtuels"
+                }
+            };
+
+            function applyLanguage(lang) {
+                if (!pageTranslations[lang]) lang = 'en';
+                currentPageLanguage = lang;
+                const T = pageTranslations[currentPageLanguage];
+
+                document.documentElement.lang = lang;
+                document.title = T.pageTitle;
+
+                // Update button and tooltip
+                const downloadBtn = document.getElementById('downloadButton');
+                const downloadTooltip = document.getElementById('downloadTooltip');
+
+                if(downloadBtn) downloadBtn.childNodes[0].nodeValue = T.downloadButtonText + ' ';
+                if(downloadTooltip) downloadTooltip.textContent = T.downloadButtonTooltip;
+
+                 // Update dynamic messages if they are currently displayed
+                 const tableContainer = document.getElementById('table-container');
+                 if (tableContainer && tableContainer.querySelector('h2')) {
+                      const currentH2 = tableContainer.querySelector('h2');
+                      // Re-evaluate which message should be shown based on current state
+                      if (!currentUserId) {
+                           currentH2.textContent = T.errorUserContext;
+                      } else if (!tableHtmlContent || typeof tableHtmlContent !== 'string' || tableHtmlContent.trim() === '') {
+                          const safeProfileName = profileName || '(Unknown)';
+                          currentH2.textContent = T.errorNoResults.replace('{profileName}', safeProfileName).replace('{currentUserId}', currentUserId);
+                      } else if (currentH2.textContent.includes("Loading") || currentH2.textContent.includes("Chargement")) { // Check if it was loading
+                          currentH2.textContent = T.loadingResults;
+                      } else if (currentH2.textContent.includes("Error displaying") || currentH2.textContent.includes("Erreur lors de l'affichage")) {
+                           currentH2.textContent = T.errorDisplayingTable;
+                      }
+                 }
+
+                console.log(`Result Virtual page language applied: ${lang}`);
+            }
+
+            function getUserStorageKey(baseKey) {
+                if (!currentUserId) {
+                    return null;
+                }
+                return `${currentUserId}_${baseKey}`;
+            }
+
+            function setUserItem(baseKey, value) {
+                const userKey = getUserStorageKey(baseKey);
+                if (userKey) {
+                    try {
+                        localStorage.setItem(userKey, JSON.stringify(value));
+                        console.log(`Saved to localStorage [${userKey}]`);
+                    } catch (e) {
+                        console.error(`Error saving to localStorage [${userKey}]:`, e);
+                        alert("Error saving data. Storage might be full.");
+                    }
+                }
+            }
+
+            function getUserItem(baseKey, defaultValue = null) {
+                    const userKey = getUserStorageKey(baseKey);
+                if (!userKey) return defaultValue;
+                try {
+                    const item = localStorage.getItem(userKey);
+                    return item ? JSON.parse(item) : defaultValue;
+                } catch (e) {
+                    console.error(`Error parsing user item ${userKey}:`, e);
+                    return defaultValue;
+                }
+            }
+            function initializePageResult() {
+                const T = pageTranslations[currentPageLanguage]; // Use current language translations
+                const tableContainer = document.getElementById('table-container');
+                const downloadBtn = document.getElementById('downloadButton');
+                currentUserId = getUserItem('currentUserId', null); // Load UID if previously stored by pagehome
+
+                if (!currentUserId) {
+                    console.error("Cannot initialize page: Username not set.");
+                    if(tableContainer) tableContainer.innerHTML = `<h2>${T.errorUserContext}</h2>`;
+                    if(downloadBtn) downloadBtn.disabled = true;
+                    return;
+                }
+                console.log(`Initializing result virtual page for user: ${currentUserId}`);
+
+                // Apply language *first* to ensure messages are correct
+                applyLanguage(currentPageLanguage);
+
+                tableHtmlContent = getUserItem('table', null); // The generated HTML table string
+                profileName = getUserItem('profileName', '');
+                // fullData = getUserItem('fullData',[]); // Raw data if needed for export fix
+
+                console.log("Initial load - User:", currentUserId);
+                console.log("Initial load - Table HTML available:", !!tableHtmlContent);
+                console.log("Initial load - Profile Name:", profileName);
+
+
+                if (!tableHtmlContent || typeof tableHtmlContent !== 'string' || tableHtmlContent.trim() === '') {
+                    console.warn("No table HTML content found in localStorage for this user.");
+                    const safeProfileName = profileName || '(Unknown)'; // Handle missing profile name
+                    if(tableContainer) tableContainer.innerHTML = `<h2>${T.errorNoResults.replace('{profileName}', safeProfileName).replace('{currentUserId}', currentUserId)}</h2>`;
+                    if(downloadBtn) downloadBtn.disabled = true;
+                    return;
+                }
+
+                // Display the table and enable download
+                console.log("Table HTML content loaded, calling loadTable...");
+                loadTable();
+                if(downloadBtn) downloadBtn.disabled = false;
+            }
+
+            // Listener for messages from parent
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.action) {
+                console.log(`similarity.html received message:`, event.data);
+                switch(event.data.action) {
+                    case 'setUser':
+                        const receivedUid = event.data.uid;
+                        console.log(`User context received: UID=${receivedUid}`);
+                        if (!currentUserId || currentUserId !== receivedUid) {
+                            currentUserId = receivedUid;
+                            setUserItem('currentUserId', currentUserId);
+                            console.log(`User UID set to: ${currentUserId}. Initializing page...`);
+                            initializePageResult();
+                        } else {
+                             console.log(`User ${currentUserId} already set. Re-initializing (data might have changed in pagehome).`);
+                             initializePageResult();
+                        }
+                        break;
+                    case 'setLanguage':
+                        console.log(`Language received: ${event.data.lang}`);
+                        applyLanguage(event.data.lang);
+                        break;
+                     default:
+                         console.log("Received unhandled message action:", event.data.action);
+                         break;
+                }
+            }
+        });
+
+            // Loads the HTML table string into the container
+            function loadTable() {
+                const T = pageTranslations[currentPageLanguage];
+                const container = document.getElementById('table-container');
+                if (container && tableHtmlContent) {
+                    container.innerHTML = tableHtmlContent; // Directly inject the saved HTML
+                    console.log("Table HTML injected into container.");
+                } else {
+                    console.error("Table container not found or table HTML content is missing.");
+                    if(container) container.innerHTML = `<h2>${T.errorDisplayingTable}</h2>`;
+                    const downloadBtn = document.getElementById('downloadButton');
+                    if(downloadBtn) downloadBtn.disabled = true;
+                }
+            }
+
+            // Exports the displayed table to CSV
+            function export_en_CSV() {
+                const T = pageTranslations[currentPageLanguage];
+                let safeProfileName = T.defaultFilename; // Default filename in current language
+                 if (profileName) {
+                     safeProfileName = profileName.replace(/[^a-z0-9_\-.]/gi, '_'); // Sanitize
+                 } else {
+                      console.warn("Profile name missing, using default for download.");
+                 }
+                 let filename = `${T.downloadFilenamePrefix}${safeProfileName}.csv`; // Use translated prefix
+
+                let csvContent = "";
+                const tableElement = document.querySelector("#table-container table"); // Select table within container
+
+                if (!tableElement) {
+                    alert(T.alertNoTableElement); // Translated alert
+                    console.error("Table element not found within #table-container for export.");
+                    return;
+                }
+
+                const rows = tableElement.querySelectorAll("tr");
+
+                rows.forEach((row) => {
+                    let rowData = [];
+                    row.querySelectorAll("th, td").forEach(cell => {
+                        let cellText = cell.innerText || cell.textContent || "";
+                        let escapedText = cellText.replace(/"/g, '""'); // Escape double quotes
+                        rowData.push(`"${escapedText}"`); // Wrap in quotes
+                    });
+                    csvContent += rowData.join(",") + "\n";
+                });
+
+                 if (csvContent.endsWith("\n")) { csvContent = csvContent.slice(0, -1); }
+
+                if (!csvContent) {
+                    alert(T.alertNoDataToExport); // Translated alert
+                    return;
+                }
+
+                let blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" }); // Add BOM for Excel UTF-8 compatibility
+                let link = document.createElement("a");
+
+                if (navigator.msSaveBlob) { // IE 10+
+                     navigator.msSaveBlob(blob, filename);
+                 } else {
+                    link.href = URL.createObjectURL(blob);
+                    link.setAttribute("download", filename);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(link.href);
+                 }
+                 console.log(`Exporting data as ${filename}`);
+            }
+
+             // Initial setup message based on default language
+             const initialLangResult = localStorage.getItem('appLanguage') || 'en';
+             const initialTResult = pageTranslations[initialLangResult];
+             const tableContainerInitial = document.getElementById('table-container');
+             if (tableContainerInitial) tableContainerInitial.innerHTML = `<h2>${initialTResult.loadingResults}</h2>`;
+             console.log("result_virtual.html script loaded. Waiting for 'setUser' message...");
+             applyLanguage(initialLangResult); // Apply initial language
+
+
+        </script>
+    </body>
+</html>

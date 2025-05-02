@@ -1,0 +1,172 @@
+
+        :root {
+            --primary-color: #007bff;
+            --primary-hover-color: #0056b3;
+            --success-color: #28a745;
+            --success-bg-color: #d4edda;
+            --success-border-color: #c3e6cb;
+            --error-color: #dc3545;
+            --error-bg-color: #f8d7da;
+            --error-border-color: #f5c6cb;
+            --light-gray-color: #f8f9fa;
+            --medium-gray-color: #ced4da;
+            --dark-gray-color: #495057;
+            --text-color: #333;
+            --body-bg-color: #eef2f7; /* Light background for the page */
+            --container-bg-color: #ffffff;
+            --input-border-color: #ced4da;
+            --input-focus-border-color: var(--primary-color);
+            --input-focus-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+
+        /* Global Styles */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--body-bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Use 100vh for full viewport height */
+            padding: 20px; /* Add padding for smaller screens */
+        }
+
+        /* Container Styling */
+        .login-container {
+            background-color: var(--container-bg-color);
+            padding: 35px 45px; /* Slightly adjusted padding */
+            border-radius: 12px; /* Softer corners */
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            width: 100%; /* Responsive width */
+            max-width: 420px; /* Slightly wider max width */
+            text-align: center;
+            overflow: hidden; /* Hide overflow for potential animations */
+        }
+
+        .login-container h2 {
+            margin-bottom: 25px;
+            color: var(--primary-color);
+            font-weight: 600;
+            font-size: 1.8em; /* Larger heading */
+        }
+
+        /* Form Styling */
+        form {
+            width: 100%;
+            transition: opacity 0.3s ease-in-out; /* For potential toggle effects */
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+            position: relative; /* For potential icon positioning */
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark-gray-color);
+            font-size: 0.95em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px; /* More padding */
+            border: 1px solid var(--input-border-color);
+            border-radius: 8px; /* Softer corners for inputs */
+            font-size: 1em;
+            font-family: 'Poppins', sans-serif;
+            color: var(--text-color);
+            transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        /* Add focus effect */
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--input-focus-border-color);
+            box-shadow: var(--input-focus-shadow);
+        }
+        /* Style placeholders */
+        .form-group input::placeholder {
+            color: var(--medium-gray-color);
+            opacity: 0.8;
+        }
+
+        /* Button Styling (replaces button-base definition) */
+        .button-base {
+            width: 100%;
+            padding: 12px 15px;
+            margin-top: 15px; /* Space above button */
+            font-size: 1.05em;
+            font-weight: 500;
+            color: #fff;
+            background-color: var(--primary-color);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+            text-transform: uppercase; /* Optional: Uppercase text */
+            letter-spacing: 0.5px; /* Optional: Letter spacing */
+        }
+        .button-base:hover {
+            background-color: var(--primary-hover-color);
+        }
+        .button-base:active {
+            transform: scale(0.98); /* Slight press effect */
+        }
+
+        /* Message Styling */
+        .message {
+            margin-top: 20px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.95em;
+            border: 1px solid transparent;
+            display: none; /* Keep hidden initially */
+            text-align: left; /* Align message text left */
+            position: relative; /* For icon positioning */
+            padding-left: 40px; /* Space for icon */
+        }
+        /* Add icons using pseudo-elements */
+        .message::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: 900;
+            font-size: 1.1em;
+        }
+
+
+        /* Toggle Link Styling */
+        .toggle-link {
+            margin-top: 25px;
+            color: var(--primary-color);
+            cursor: pointer;
+            text-decoration: none; /* Remove default underline */
+            font-weight: 500;
+            display: inline-block; /* Allows better spacing/hover */
+            transition: color 0.2s ease;
+        }
+        .toggle-link:hover {
+            color: var(--primary-hover-color);
+            text-decoration: underline; /* Underline on hover */
+        }
+
+        /* Signup Form Initial State */
+        #signupForm {
+            display: none;
+        }
+         /* Note Styling */
+         #signupForm p {
+            font-size: 0.85em;
+            color: #6c757d; /* Bootstrap muted color */
+            margin-bottom: 15px;
+         }
